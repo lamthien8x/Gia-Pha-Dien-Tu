@@ -1,37 +1,28 @@
-# PlanPhase2 — Kiến trúc FE & BE cho ClanHub (Giai đoạn 2: Cộng đồng Dòng Họ)
+# PlanPhase2 — Kiến trúc FE & BE cho ClanHub (Giai đoạn 2: Ứng dụng Thông tin Trung tâm)
 
-**Phiên bản:** v1.0  
-**Ngày:** 2026-02-19  
-**Tham chiếu:** `prd (1).md` — Giai đoạn 2 "Cộng đồng dòng họ"  
-**Kế thừa từ:** `PlanPhase1.md` — mọi module Phase 1 được giữ nguyên và mở rộng
+**Phiên bản:** v1.1  
+**Ngày:** 2026-02-20  
+**Lưu ý cập nhật:** Định hướng ứng dụng tập trung vào *Thông tin cốt lõi của dòng họ* và *Sự kiện quan trọng*. Khía cạnh *Cộng đồng/Hội nhóm* sẽ được tinh giảm thành phần phụ (Secondary).
 
 ---
 
 ## 1. Tổng quan mục tiêu Phase 2
 
-Biến website gia phả Lê Huy thành **mạng nội bộ dòng họ**:
+Xây dựng ClanHub trở thành **Trung tâm Thông tin Dòng họ (Family Information Hub)**, nơi mọi thành viên hướng về để cập nhật tin tức gốc, ghi nhớ lịch sử - sự kiện và tra cứu danh bạ người thân. 
 
-- **News Feed**: bài viết, ảnh, reactions, comments
-- **Nhóm chi họ** (Groups): tạo nhóm theo chi/khu vực
-- **Sự kiện & Lịch**: họp họ, giỗ tổ, RSVP, nhắc sinh nhật/giỗ
-- **Member Directory**: danh bạ + đề xuất kết nối
-- **Moderation**: report, duyệt nội dung, role Moderator
-- **Notifications**: email + in-app real-time
+**Trọng tâm (Core):**
+1. **Bảng tin Dòng họ (Family News Board):** Kênh thông báo chính thức, tin tức quan trọng từ trưởng tộc, báo cáo quỹ họ, câu chuyện truyền thống.
+2. **Sự kiện & Lịch (Events & Calendar) [Rất quan trọng]:** Số hóa lịch công việc dòng họ (giỗ tổ, ngày kỵ, họp họ, thanh minh). Nhắc nhở qua email/app, quản lý đăng ký tham dự (RSVP).
+3. **Danh bạ Dòng họ (Member Directory):** Sổ tay địa chỉ số, tìm kiếm người thân, tra cứu nhánh họ/chi họ để tăng tính kết nối dòng máu.
 
-### Kế thừa từ Phase 1
-
-| Module Phase 1 | Trạng thái Phase 2 |
-|---|---|
-| Auth & RBAC | ✅ Giữ nguyên + thêm role `MODERATOR` |
-| Genealogy Core | ✅ Giữ nguyên |
-| Privacy Filter | ✅ Giữ nguyên + áp dụng cho Directory |
-| Media Library | ✅ Mở rộng: Album theo sự kiện, search tag |
-| Audit Log | ✅ Mở rộng: community actions |
-| Backup & Export | ✅ Giữ nguyên + backup community data |
+**Phần phụ (Secondary / Add-on):**
+- **Cộng đồng / Nhóm con (Groups):** Các nhóm nhỏ tạo theo khu vực địa lý (Vd: Hội đồng hương) hoặc chi họ nhỏ. Đóng vai trò bổ trợ không gian giao lưu riêng, không làm loãng thông tin chung của dòng họ.
 
 ---
 
 ## 2. Kiến trúc tổng quan (mở rộng)
+
+Luồng dữ liệu nay tối ưu hóa để ưu tiên lan truyền thông báo chung và các sự kiện hệ trọng tới toàn bộ người dùng.
 
 ```mermaid
 graph LR
@@ -64,53 +55,26 @@ graph LR
 
 | Thành phần | Lý do |
 |---|---|
-| **Redis** | Cache, pub/sub, job queue |
-| **BullMQ** | Email, reminders sinh nhật/giỗ, feed digest |
-| **Socket.IO** | Real-time notifications |
+| **Redis** | Cache thông báo dòng họ, dữ liệu lịch gia tộc, pub/sub |
+| **BullMQ** | Xử lý hàng đợi email, nhắc nhở lịch giỗ chạp/hành lễ trọng điểm |
+| **Socket.IO** | Thông báo real-time khi có tin tức/sự kiện gấp |
 
 ---
 
-## 3. Bổ sung Tech Stack
+## 3. Database Schema mở rộng
 
-### Backend mới
-
-| Thành phần | Công nghệ |
-|---|---|
-| Real-time | **Socket.IO** |
-| Job Queue | **BullMQ** + **Redis** |
-| Search | **PostgreSQL Full-text** (pg_trgm) |
-| Rich Text | **TipTap** serializer |
-
-### Frontend mới
-
-| Thành phần | Công nghệ |
-|---|---|
-| Rich Text Editor | **TipTap** (headless) |
-| Calendar | **FullCalendar** |
-| Real-time | **Socket.IO Client** |
-| Infinite Scroll | `useInfiniteQuery` (TanStack) |
-| Emoji | **emoji-mart** |
-
----
-
-## 4. Database Schema mở rộng
-
-### 4.1 Cập nhật Role enum
+### 3.1 Cập nhật Role & User model
 
 ```prisma
 enum Role {
   ADMIN
   EDITOR
   ARCHIVIST
-  MODERATOR    // 🆕
+  MODERATOR    // Quản lý nội dung đăng trên bảng tin chung
   MEMBER
   GUEST
 }
-```
 
-### 4.2 Cập nhật User model
-
-```prisma
 model User {
   // ... Phase 1 fields giữ nguyên ...
   // 🆕 Phase 2
@@ -120,92 +84,14 @@ model User {
   grampsPersonId  String?
   posts           Post[]
   comments        Comment[]
-  reactions       Reaction[]
-  groupMembers    GroupMember[]
   createdEvents   Event[]
   rsvps           RSVP[]
   notifications   Notification[]
+  groupMembers    GroupMember[] // Phụ: Bảng theo dõi việc tham gia nhóm nhỏ
 }
 ```
 
-### 4.3 News Feed models
-
-```prisma
-model Post {
-  id        String     @id @default(cuid())
-  authorId  String
-  author    User       @relation(fields: [authorId], references: [id])
-  type      PostType   @default(STORY) // ANNOUNCEMENT, STORY, QUESTION, ARCHIVE_DROP
-  title     String?
-  body      Json       // TipTap JSON
-  bodyPlain String?    // Plain text for search
-  mediaRefs String[]
-  groupId   String?
-  group     Group?     @relation(fields: [groupId], references: [id])
-  isPinned  Boolean    @default(false)
-  status    PostStatus @default(PUBLISHED) // DRAFT, PUBLISHED, HIDDEN, DELETED
-  comments  Comment[]
-  reactions Reaction[]
-  reports   Report[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-}
-
-model Comment {
-  id        String   @id @default(cuid())
-  postId    String
-  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  body      String
-  parentId  String?  // Nested replies
-  parent    Comment? @relation("replies", fields: [parentId], references: [id])
-  replies   Comment[] @relation("replies")
-  status    String   @default("VISIBLE") // VISIBLE, HIDDEN, DELETED
-  createdAt DateTime @default(now())
-}
-
-model Reaction {
-  id     String @id @default(cuid())
-  postId String
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-  type   String // "like", "love", "celebrate", "pray"
-  @@unique([postId, userId])
-}
-```
-
-### 4.4 Groups models
-
-```prisma
-model Group {
-  id          String   @id @default(cuid())
-  name        String
-  description String?
-  type        String   @default("BRANCH") // BRANCH, REGIONAL, INTEREST
-  visibility  String   @default("OPEN")   // OPEN, CLOSED
-  avatarUrl   String?
-  createdBy   String
-  members     GroupMember[]
-  posts       Post[]
-  events      Event[]
-  createdAt   DateTime @default(now())
-}
-
-model GroupMember {
-  id       String @id @default(cuid())
-  groupId  String
-  group    Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  userId   String
-  user     User   @relation(fields: [userId], references: [id])
-  role     String @default("MEMBER") // ADMIN, MODERATOR, MEMBER
-  joinedAt DateTime @default(now())
-  @@unique([groupId, userId])
-}
-```
-
-### 4.5 Events & Calendar models
+### 3.2 Lịch & Sự kiện Dòng họ (Trọng tâm)
 
 ```prisma
 model Event {
@@ -215,14 +101,16 @@ model Event {
   startAt     DateTime
   endAt       DateTime?
   location    String?
-  type        String   @default("GENERAL") // MEMORIAL, BIRTHDAY, ANNIVERSARY, MEETING
-  groupId     String?
-  group       Group?   @relation(fields: [groupId], references: [id])
+  type        String   @default("MEMORIAL") // MEMORIAL (giỗ), MEETING (họp), FESTIVAL (lễ), BIRTHDAY
   createdBy   String
   creator     User     @relation(fields: [createdBy], references: [id])
   isRecurring Boolean  @default(false)
-  recurrence  Json?
+  recurrence  Json?    // Chu kỳ lặp (Vd: Âm lịch hàng năm)
   rsvps       RSVP[]
+  
+  // Phụ: Nếu sự kiện chỉ thuộc thẩm quyền một nhóm cụ thể
+  groupId     String?
+  group       Group?   @relation(fields: [groupId], references: [id])
   createdAt   DateTime @default(now())
 }
 
@@ -239,222 +127,179 @@ model RSVP {
 }
 ```
 
-### 4.6 Notifications & Moderation
+### 3.3 Bảng tin & Thông báo (Trung tâm)
 
 ```prisma
-model Notification {
-  id          String   @id @default(cuid())
-  recipientId String
-  recipient   User     @relation(fields: [recipientId], references: [id])
-  type        String   // "new_post", "comment", "rsvp_reminder", "birthday", "memorial"
-  title       String
-  body        String?
-  link        String?
-  isRead      Boolean  @default(false)
-  createdAt   DateTime @default(now())
+model Post {
+  id        String     @id @default(cuid())
+  authorId  String
+  author    User       @relation(fields: [authorId], references: [id])
+  type      PostType   @default(ANNOUNCEMENT) // ANNOUNCEMENT (cáo phó/tin lớn), STORY, FUND
+  title     String?
+  body      Json       // TipTap JSON content
+  bodyPlain String?    
+  mediaRefs String[]
+  isPinned  Boolean    @default(false)
+  status    PostStatus @default(PUBLISHED)
+  
+  // Phụ: Bài viết thuộc một nhóm con nào đó
+  groupId   String?
+  group     Group?     @relation(fields: [groupId], references: [id])
+  
+  comments  Comment[]
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
 }
 
-model Report {
-  id          String   @id @default(cuid())
-  reporterId  String
-  entityType  String   // "post", "comment"
-  postId      String?
-  commentId   String?
-  reason      String   // "spam", "inappropriate", "privacy_violation"
-  description String?
-  status      String   @default("OPEN") // IN_REVIEW, RESOLVED, DISMISSED
-  resolvedBy  String?
-  resolution  String?
-  createdAt   DateTime @default(now())
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String
+  parentId  String?  
+  replies   Comment[] @relation("replies")
+  createdAt DateTime @default(now())
 }
+```
 
-model Album {
+### 3.4 Nhóm Cộng Đồng / Chi nhánh (Phần phụ)
+
+```prisma
+model Group {
   id          String   @id @default(cuid())
   name        String
   description String?
-  eventId     String?
+  type        String   @default("BRANCH") // BRANCH (chi họ), REGIONAL (hội đồng hương)
+  visibility  String   @default("OPEN")
+  avatarUrl   String?
   createdBy   String
-  media       Media[]
+  members     GroupMember[]
+  posts       Post[]
+  events      Event[]
   createdAt   DateTime @default(now())
+}
+
+model GroupMember {
+  id       String @id @default(cuid())
+  groupId  String
+  group    Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+  role     String @default("MEMBER") 
+  joinedAt DateTime @default(now())
+  @@unique([groupId, userId])
 }
 ```
 
 ---
 
-## 5. API Endpoints mới
+## 4. API Endpoints mới
 
-### Posts (`/api/posts`)
-
+### Sự kiện & Lịch (`/api/events`) [Trọng tâm]
 | Method | Path | Mô tả | Role |
 |---|---|---|---|
-| GET | `/` | Feed (paginated, filter group/type) | Member+ |
-| POST | `/` | Đăng bài | Member+ |
-| PATCH | `/:id` | Sửa bài | Author/Admin |
-| DELETE | `/:id` | Xóa bài | Author/Admin |
-| PATCH | `/:id/pin` | Pin/Unpin | Admin/Moderator |
-| POST | `/:id/comments` | Thêm comment | Member+ |
-| POST | `/:id/reactions` | Toggle reaction | Member+ |
+| GET | `/` | Lấy chi tiết lịch dòng họ (Calendar view) | Member+ |
+| GET | `/upcoming` | Sự kiện sắp tới (hiển thị trang chủ) | Member+ |
+| POST | `/` | Tạo lịch (giỗ, họp, sự kiện quỹ) | Admin/Mod/Elder |
+| POST | `/:id/rsvp` | Báo danh, đăng ký cỗ bàn | Member+ |
 
-### Groups (`/api/groups`)
-
+### Danh bạ & Tìm kiếm (`/api/directory`) [Trọng tâm]
 | Method | Path | Mô tả | Role |
 |---|---|---|---|
-| GET | `/` | Danh sách nhóm | Member+ |
-| POST | `/` | Tạo nhóm | Admin/Moderator |
-| GET | `/:id` | Chi tiết nhóm | Member+ |
-| POST | `/:id/join` | Tham gia | Member+ |
-| POST | `/:id/leave` | Rời nhóm | Member+ |
-| PATCH | `/:id/members/:userId` | Đổi role | Group Admin |
-| GET | `/:id/posts` | Feed nhóm | Group Member |
+| GET | `/members` | Danh sách thành viên trong toàn họ | Member+ |
+| GET | `/search` | Tìm kiếm người thân, tra cứu chi nhánh | Member+ |
+| PATCH | `/profile` | Cập nhật hồ sơ năng lực/liên hệ | Owner |
 
-### Events (`/api/events`)
-
+### Bảng tin Cốt lõi (`/api/posts`) [Trọng tâm]
 | Method | Path | Mô tả | Role |
 |---|---|---|---|
-| GET | `/` | Calendar view | Member+ |
-| GET | `/upcoming` | Sắp tới + reminders | Member+ |
-| POST | `/` | Tạo sự kiện | Member+ |
-| POST | `/:id/rsvp` | Gửi RSVP | Member+ |
-| GET | `/:id/rsvps` | Danh sách RSVP | Member+ |
+| GET | `/` | Lấy các tin tức gốc của họ | Member+ |
+| POST | `/` | Đăng thông báo/cáo phó/tin quỹ | Editor/Admin |
+| POST | `/:id/comments` | Bình luận/chia buồn/chúc mừng | Member+ |
 
-### Notifications (`/api/notifications`)
-
+### Nhóm Cộng đồng (`/api/groups`) [Phụ]
 | Method | Path | Mô tả | Role |
 |---|---|---|---|
-| GET | `/` | List (paginated) | Auth |
-| GET | `/unread-count` | Đếm unread | Auth |
-| PATCH | `/:id/read` | Mark read | Auth |
-| PATCH | `/read-all` | Mark all read | Auth |
-
-### Moderation (`/api/moderation`)
-
-| Method | Path | Mô tả | Role |
-|---|---|---|---|
-| GET | `/reports` | Danh sách reports | Moderator/Admin |
-| POST | `/reports` | Tạo report | Member+ |
-| PATCH | `/reports/:id` | Resolve report | Moderator/Admin |
-| PATCH | `/posts/:id/hide` | Ẩn bài | Moderator/Admin |
-
-### Directory & Search
-
-| Method | Path | Mô tả | Role |
-|---|---|---|---|
-| GET | `/api/directory/members` | Danh bạ | Member+ |
-| GET | `/api/directory/suggestions` | Đề xuất kết nối | Member+ |
-| GET | `/api/search?q=...&type=...` | Tìm kiếm tổng hợp | Member+ |
+| GET | `/` | Danh sách nhóm con/chi hội | Member+ |
+| POST | `/` | Tạo chi hội mới | Member+ |
 
 ---
 
-## 6. Frontend — Pages mới
+## 5. Frontend — Cấu trúc Trải nghiệm (UI/UX)
 
-### 6.1 Cấu trúc mở rộng
+Trang chủ (Home) sẽ được cấu trúc lại hoàn toàn để làm nổi bật **Tin Tức Dòng Họ** và **Danh sách Sự kiện sắp tới**, thay vì tiếp cận giống một mạng xã hội thông thường.
 
+### 5.1 Cấu trúc thư mục
 ```
 frontend/src/app/(main)/
 ├── ... Phase 1 pages ✅ ...
-├── feed/page.tsx              ← 🆕 News Feed
-├── groups/
-│   ├── page.tsx               ← 🆕 Danh sách nhóm
-│   └── [id]/page.tsx          ← 🆕 Chi tiết nhóm
+├── feed/page.tsx              ← 🆕 Bảng tin dòng họ chính thức
 ├── events/
-│   ├── page.tsx               ← 🆕 Calendar
-│   └── [id]/page.tsx          ← 🆕 Chi tiết sự kiện
+│   ├── page.tsx               ← 🆕 Lịch & Sự kiện gia tộc
+│   └── [id]/page.tsx          
 ├── directory/
-│   ├── page.tsx               ← 🆕 Danh bạ
-│   └── [id]/page.tsx          ← 🆕 Profile
-└── notifications/page.tsx     ← 🆕
+│   ├── page.tsx               ← 🆕 Danh bạ dòng họ
+│   └── [id]/page.tsx          ← 🆕 Trang cá nhân (Profile)
+├── notifications/page.tsx     ← 🆕
+└── groups/                    ← 🔽 Module cộng đồng phụ
+    ├── page.tsx               
+    └── [id]/page.tsx          
 ```
 
-### 6.2 Mô tả trang
+### 5.2 Giao diện cốt lõi
+- **Trang chủ / Bảng tin**: Chia layout thông minh. 
+  - Cột trái: Thống kê quỹ họ / Liên kết nhanh gia phả. 
+  - Cột giữa: Bảng tin tập trung (thông báo chính thức, bài viết được kiểm duyệt). 
+  - Cột phải: Widget sự kiện sắp tới (Giỗ, Họp, Ngày kỵ).
+- **Trang Sự kiện (Calendar)**: Trình bày như một Lịch vạn niên gia tộc. Làm nổi bật sự kiện âm lịch. Chức năng đăng ký tham gia (RSVP) rõ ràng để ban tổ chức chuẩn bị hậu cần, cỗ bàn.
+- **Trang Danh bạ**: Giao diện giống sổ địa chỉ chuyên nghiệp (Corporate Directory). Nhấn mạnh khả năng lọc nâng cao (tìm theo ngành/nghề, nơi ở, hoặc nhánh chi họ) để tăng giá trị liên kết.
 
-- **Feed** (`/feed`): PostComposer (TipTap) + infinite scroll feed + pin posts + reactions + comments
-- **Groups** (`/groups`): card grid nhóm, join/leave, group detail với feed/members/events tabs
-- **Events** (`/events`): FullCalendar month/week view, upcoming sidebar, event detail + RSVP
-- **Directory** (`/directory`): search/filter thành viên, connection suggestions, public profile
-- **Notifications**: bell icon + dropdown trong header, full page list
-
-### 6.3 Sidebar Navigation mở rộng
-
+**Navigation Menu (Sắp xếp theo thứ tự ưu tiên):**
 ```
-🏠 Home          📰 Feed ← 🆕
-🌳 Cây Gia Phả   👥 Nhóm ← 🆕
-📁 Tư liệu       📅 Sự kiện ← 🆕
-📇 Danh bạ ← 🆕  🔔 Thông báo ← 🆕
-⚙️ Admin (+ Kiểm duyệt ← 🆕)
+🏠 Trang chủ (Bảng tin chung)
+📇 Danh bạ thành viên
+📅 Sự kiện & Ngày kỵ (Âm lịch)
+🌳 Cây Gia Phả
+📁 Tư liệu & Gia phả số
+👥 Nhóm / Chi nhánh (🔽 Phụ)
+🔔 Thông báo
 ```
 
 ---
 
-## 7. Background Jobs (BullMQ)
+## 6. Background Jobs (BullMQ)
 
-| Job | Schedule | Mô tả |
+Tập trung tối đa vào tính năng phân phối tin tức và nhắc lịch:
+
+| Job | Mô tả | Mức độ |
 |---|---|---|
-| `birthday-reminder` | Daily 8 AM | Sinh nhật hôm nay → notify |
-| `memorial-reminder` | Daily 8 AM | Ngày giỗ sắp tới → notify |
-| `event-reminder` | Hourly | Sự kiện trong 24h → notify attendees |
-| `email-sender` | On demand | Queue gửi email |
-
-### Notification Flow
-
-```mermaid
-sequenceDiagram
-    participant Actor
-    participant BE as Backend
-    participant WS as WebSocket
-    participant EM as Email
-
-    Actor->>BE: Action (post/comment/RSVP)
-    BE->>BE: Save Notification to DB
-    BE->>WS: Emit real-time push
-    alt Email enabled
-        BE->>EM: Enqueue email job
-    end
-```
+| `lunar-event-reminder` | Chuyển đổi lịch âm-dương và nhắc nhở ngày giỗ/ngày kỵ (trước 3 ngày, 1 ngày). | Cao |
+| `birthday-reminder` | Nhắc sinh nhật các bậc trưởng bối trong họ. | Cao |
+| `announcement-digest` | Gửi email tổng hợp các thông cáo báo chí, sự kiện quan trọng trong tháng. | Trung bình |
+| `email-sender` | Queue gửi email phân phối thông báo hệ thống. | Cao |
 
 ---
 
-## 8. Milestones Phase 2
+## 7. Milestones Phase 2 (Cập nhật mức độ ưu tiên)
+
+Lộ trình được triển khai theo hướng đưa những thông tin giá trị cốt lõi lên trước.
 
 | Milestone | Nội dung | Thời gian |
 |---|---|---|
-| **M5** | Feed + Post/Comment/Reaction + TipTap | 2–3 tuần |
-| **M6** | Groups + permissions + group feed | 2–3 tuần |
-| **M7** | Events + Calendar + RSVP + Reminders | 2–3 tuần |
-| **M8** | Directory + Search + Moderation + Notifications | 2–3 tuần |
-| **Tổng** | | **8–12 tuần** |
-
-### Chi tiết
-
-- **M5**: [Infra] Redis container; [BE] Post/Comment/Reaction CRUD; [FE] TipTap editor, PostFeed infinite scroll, CommentSection
-- **M6**: [BE] Group CRUD, group permissions; [FE] Group list/detail, member management
-- **M7**: [BE] Event/RSVP CRUD, BullMQ reminder jobs, WebSocket; [FE] FullCalendar, RSVP UI, NotificationBell
-- **M8**: [BE] Directory + search (pg_trgm) + moderation; [FE] Directory page, search bar, moderation queue; [QA] Integration tests
+| **M5** | **Trung tâm Dữ liệu:** Danh bạ (Directory) + Profile + Tìm kiếm người thân. | 2 tuần |
+| **M6** | **Thông tin & Bản tin:** Bảng tin toàn họ (Posts, Comments) + Trình soạn thảo (TipTap). | 2 tuần |
+| **M7** | **Lịch Gia Tộc:** Quản lý Sự kiện (Events) + RSVP + BullMQ nhắc ngày giỗ (Âm lịch). | 3 tuần |
+| **M8** | **Cộng đồng phụ & Hoàn thiện:** Nhóm/Chi nhánh (Groups) + Notifications + Moderation. | 2 tuần |
+| **Tổng** | | **~9 tuần** |
 
 ---
 
-## 9. Verification Plan
+## 8. Rủi ro & Giải pháp Phase 2
 
-### Automated Tests
-- Post/Comment/Reaction CRUD + permissions
-- Group role-based access
-- RSVP state transitions + unique constraint
-- Notification recipients + channels
-- Full-text search accuracy (tiếng Việt + pg_trgm)
-
-### Manual Verification
-- Đăng bài → feed → comment → reaction → real-time update
-- Tạo nhóm → invite → bài trong nhóm → chỉ members thấy
-- Tạo sự kiện giỗ tổ → RSVP → nhận reminder
-- Report bài → Moderator ẩn → author nhận thông báo
-- Tìm kiếm "Lê Huy Hà Nội" → kết quả directory chính xác
-
----
-
-## 10. Rủi ro Phase 2
-
-| Rủi ro | Mức độ | Giảm thiểu |
-|---|---|---|
-| Feed performance | Trung bình | Cursor pagination, Redis cache |
-| Notification spam | Trung bình | User preferences, batch digest |
-| Search tiếng Việt | Trung bình | `pg_trgm` + `unaccent` extension |
-| Moderation backlog | Thấp | Auto-hide khi report đạt threshold |
+| Rủi ro | Giải pháp |
+|---|---|
+| Tính toán Kỷ niệm/Ngày giỗ (Âm lịch) phức tạp | Ưu tiên sử dụng thư viện lịch âm chuẩn xác (JS lunar calendar), lưu trữ song song timestamp âm-dương trong cơ sở dữ liệu. |
+| Người cao tuổi khó tiếp cận | Giao diện Bảng tin & Lịch cần to, rõ ràng, thiết kế đơn giản như một tờ báo. Hỗ trợ thông báo bổ sung qua Zalo/SMS trong tương lai. |
+| Mất kiểm soát thông tin (Loãng tin) | Phân quyền đăng tin chặt chẽ. Chỉ Admin/Editor mới có quyền đăng tin lên Bảng tin chính. Nội dung do thành viên đăng (Member) sẽ nằm trong các Group phụ hoặc cần qua kiểm duyệt. |

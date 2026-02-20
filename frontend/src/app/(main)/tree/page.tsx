@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, ZoomIn, ZoomOut, Maximize2, TreePine, Eye, Users, GitBranch, User, ArrowDownToLine, ArrowUpFromLine, Crosshair, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { MOCK_TREE_NODES, MOCK_FAMILIES } from '@/lib/mock-genealogy';
 import {
     computeLayout, filterAncestors, filterDescendants,
     CARD_W, CARD_H,
-    type TreeNode, type TreeFamily, type LayoutResult, type PositionedNode, type Connection,
+    type TreeNode, type TreeFamily, type LayoutResult, type PositionedNode, type PositionedCouple, type Connection,
 } from '@/lib/tree-layout';
 
 type ViewMode = 'full' | 'ancestor' | 'descendant';
@@ -78,6 +78,72 @@ export default function TreeViewPage() {
             : displayData;
         return computeLayout(d.people, d.families);
     }, [displayData]);
+
+    // ═══ Viewport culling: only render visible nodes ═══
+    const CULL_PAD = 300; // px padding around viewport
+
+    const visibleNodes = useMemo(() => {
+        if (!layout || !viewportRef.current) return layout?.nodes ?? [];
+        const vw = viewportRef.current.clientWidth;
+        const vh = viewportRef.current.clientHeight;
+        const { x: tx, y: ty, scale } = transform;
+        // Convert viewport rect to tree-space coordinates
+        const left = (-tx / scale) - CULL_PAD;
+        const top = (-ty / scale) - CULL_PAD;
+        const right = ((vw - tx) / scale) + CULL_PAD;
+        const bottom = ((vh - ty) / scale) + CULL_PAD;
+        return layout.nodes.filter(n =>
+            n.x + CARD_W >= left && n.x <= right &&
+            n.y + CARD_H >= top && n.y <= bottom
+        );
+    }, [layout, transform]);
+
+    const visibleHandles = useMemo(() => new Set(visibleNodes.map(n => n.node.handle)), [visibleNodes]);
+
+    // Batched SVG paths for connections
+    const { parentPaths, couplePaths, visibleCouples } = useMemo(() => {
+        if (!layout) return { parentPaths: '', couplePaths: '', visibleCouples: [] as PositionedCouple[] };
+        let pp = '';
+        let cp = '';
+        const vc: PositionedCouple[] = [];
+        // Only render connections where at least one endpoint is visible
+        for (const c of layout.connections) {
+            // Check if any endpoint is near visible area
+            const vw = viewportRef.current?.clientWidth ?? 1200;
+            const vh = viewportRef.current?.clientHeight ?? 900;
+            const { x: tx, y: ty, scale } = transform;
+            const left = (-tx / scale) - CULL_PAD;
+            const top = (-ty / scale) - CULL_PAD;
+            const right = ((vw - tx) / scale) + CULL_PAD;
+            const bottom = ((vh - ty) / scale) + CULL_PAD;
+            const inView = (x: number, y: number) =>
+                x >= left && x <= right && y >= top && y <= bottom;
+            if (!inView(c.fromX, c.fromY) && !inView(c.toX, c.toY)) continue;
+
+            if (c.type === 'couple') {
+                cp += `M${c.fromX},${c.fromY}L${c.toX},${c.toY}`;
+            } else {
+                const midY = c.fromY + (c.toY - c.fromY) * 0.4;
+                pp += `M${c.fromX},${c.fromY}L${c.fromX},${midY}L${c.toX},${midY}L${c.toX},${c.toY}`;
+            }
+        }
+        // Visible couples for hearts
+        for (const c of layout.couples) {
+            if (visibleHandles.has(c.fatherPos?.node.handle ?? '') || visibleHandles.has(c.motherPos?.node.handle ?? '')) {
+                vc.push(c);
+            }
+        }
+        return { parentPaths: pp, couplePaths: cp, visibleCouples: vc };
+    }, [layout, transform, visibleHandles]);
+
+    // Stable callbacks for PersonCard
+    const handleCardHover = useCallback((h: string | null) => setHoveredHandle(h), []);
+    const handleCardClick = useCallback((handle: string, x: number, y: number) => {
+        setContextMenu({ handle, x, y });
+    }, []);
+    const handleCardFocus = useCallback((handle: string) => {
+        setFocusPerson(handle);
+    }, []);
 
     // Search highlight
     useEffect(() => {
@@ -227,15 +293,7 @@ export default function TreeViewPage() {
         return treeData.people.filter(p => p.displayName.toLowerCase().includes(q)).slice(0, 8);
     }, [searchQuery, treeData]);
 
-    // SVG path for connection
-    const connPath = (c: Connection) => {
-        if (c.type === 'couple') {
-            return `M${c.fromX},${c.fromY} L${c.toX},${c.toY}`;
-        }
-        // Parent-child: orthogonal path
-        const midY = c.fromY + (c.toY - c.fromY) * 0.4;
-        return `M${c.fromX},${c.fromY} L${c.fromX},${midY} L${c.toX},${midY} L${c.toX},${c.toY}`;
-    };
+    // connPath kept for compatibility but unused with batched rendering
 
     return (
         <div className="flex flex-col h-[calc(100vh-80px)]">
@@ -324,40 +382,28 @@ export default function TreeViewPage() {
                         transformOrigin: '0 0', width: layout.width, height: layout.height,
                         position: 'absolute', top: 0, left: 0,
                     }}>
-                        {/* SVG connections */}
+                        {/* SVG connections — batched into 2 paths */}
                         <svg className="absolute inset-0 pointer-events-none" width={layout.width} height={layout.height}
                             style={{ overflow: 'visible' }}>
-                            {layout.connections.map((c, i) => (
-                                <line key={i}
-                                    x1={c.fromX} y1={c.fromY} x2={c.toX} y2={c.toY}
-                                    stroke={c.type === 'couple' ? '#cbd5e1' : '#94a3b8'}
-                                    strokeWidth={1.5}
-                                    strokeDasharray={c.type === 'couple' ? '4,3' : 'none'}
-                                />
-                            ))}
-                            {/* Couple hearts */}
-                            {layout.couples.map(c => (
+                            {parentPaths && <path d={parentPaths} stroke="#94a3b8" strokeWidth={1.5} fill="none" />}
+                            {couplePaths && <path d={couplePaths} stroke="#cbd5e1" strokeWidth={1.5} fill="none" strokeDasharray="4,3" />}
+                            {/* Couple hearts — only visible */}
+                            {visibleCouples.map(c => (
                                 <text key={c.familyHandle}
                                     x={c.midX} y={c.y + CARD_H / 2 + 4}
                                     textAnchor="middle" fontSize="10" fill="#e11d48">❤</text>
                             ))}
                         </svg>
 
-                        {/* DOM nodes */}
-                        {layout.nodes.map(item => (
-                            <PersonCard key={item.node.handle} item={item}
+                        {/* DOM nodes — only visible (culled) */}
+                        {visibleNodes.map(item => (
+                            <MemoPersonCard key={item.node.handle} item={item}
                                 isHighlighted={highlightHandles.has(item.node.handle)}
                                 isFocused={focusPerson === item.node.handle}
                                 isHovered={hoveredHandle === item.node.handle}
-                                onHover={setHoveredHandle}
-                                onClick={() => {
-                                    setContextMenu({
-                                        handle: item.node.handle,
-                                        x: item.x + CARD_W,
-                                        y: item.y + CARD_H / 2,
-                                    });
-                                }}
-                                onSetFocus={() => { setFocusPerson(item.node.handle); }}
+                                onHover={handleCardHover}
+                                onClick={handleCardClick}
+                                onSetFocus={handleCardFocus}
                             />
                         ))}
 
@@ -382,9 +428,11 @@ export default function TreeViewPage() {
                     </div>
                 )}
 
-                {/* Zoom indicator */}
-                <div className="absolute bottom-2 left-2 bg-background/80 backdrop-blur border rounded px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                    {Math.round(transform.scale * 100)}%
+                {/* Zoom + culling indicator */}
+                <div className="absolute bottom-2 left-2 bg-background/80 backdrop-blur border rounded px-1.5 py-0.5 text-[10px] text-muted-foreground flex gap-1.5">
+                    <span>{Math.round(transform.scale * 100)}%</span>
+                    {layout && <span className="opacity-60">·</span>}
+                    {layout && <span>{visibleNodes.length}/{layout.nodes.length} nodes</span>}
                 </div>
 
                 {/* Focus person selector */}
@@ -480,15 +528,22 @@ function MenuAction({ icon, label, desc, onClick }: { icon: React.ReactNode; lab
     );
 }
 
-// === Person Card Component ===
+// === Person Card Component (memoized) ===
+const MemoPersonCard = memo(PersonCard, (prev, next) =>
+    prev.item === next.item &&
+    prev.isHighlighted === next.isHighlighted &&
+    prev.isFocused === next.isFocused &&
+    prev.isHovered === next.isHovered
+);
+
 function PersonCard({ item, isHighlighted, isFocused, isHovered, onHover, onClick, onSetFocus }: {
     item: PositionedNode;
     isHighlighted: boolean;
     isFocused: boolean;
     isHovered: boolean;
     onHover: (h: string | null) => void;
-    onClick: (e: React.MouseEvent) => void;
-    onSetFocus: () => void;
+    onClick: (handle: string, x: number, y: number) => void;
+    onSetFocus: (handle: string) => void;
 }) {
     const { node, x, y } = item;
     const isMale = node.gender === 1;
@@ -536,8 +591,8 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, onHover, onClic
             style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
             onMouseEnter={() => onHover(node.handle)}
             onMouseLeave={() => onHover(null)}
-            onClick={(e) => { e.stopPropagation(); onClick(e); }}
-            onContextMenu={(e) => { e.preventDefault(); onSetFocus(); }}
+            onClick={(e) => { e.stopPropagation(); onClick(node.handle, x + CARD_W, y + CARD_H / 2); }}
+            onContextMenu={(e) => { e.preventDefault(); onSetFocus(node.handle); }}
         >
             <div className="px-2.5 py-2 h-full flex items-center gap-2.5">
                 {/* Avatar */}

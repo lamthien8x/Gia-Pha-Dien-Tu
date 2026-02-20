@@ -12,6 +12,11 @@ import {
     Database,
     ChevronLeft,
     ChevronRight,
+    BookOpen,
+    ClipboardCheck,
+    Contact,
+    Newspaper,
+    CalendarDays,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -19,13 +24,18 @@ import { useState } from 'react';
 
 const navItems = [
     { href: '/', label: 'Trang chủ', icon: Home },
+    { href: '/feed', label: 'Bảng tin', icon: Newspaper },
+    { href: '/directory', label: 'Danh bạ', icon: Contact },
+    { href: '/events', label: 'Sự kiện', icon: CalendarDays },
     { href: '/tree', label: 'Cây gia phả', icon: TreePine },
+    { href: '/book', label: 'Sách gia phả', icon: BookOpen },
     { href: '/people', label: 'Thành viên', icon: Users },
     { href: '/media', label: 'Thư viện', icon: Image },
 ];
 
 const adminItems = [
     { href: '/admin/users', label: 'Quản lý Users', icon: Shield },
+    { href: '/admin/edits', label: 'Kiểm duyệt', icon: ClipboardCheck },
     { href: '/admin/audit', label: 'Audit Log', icon: FileText },
     { href: '/admin/backup', label: 'Backup', icon: Database },
 ];
@@ -44,7 +54,7 @@ export function Sidebar() {
             {/* Logo */}
             <div className="flex items-center gap-2 px-4 py-4 border-b">
                 <TreePine className="h-6 w-6 text-primary shrink-0" />
-                {!collapsed && <span className="font-bold text-lg">ClanHub</span>}
+                {!collapsed && <span className="font-bold text-lg">Gia phả họ Lê</span>}
             </div>
 
             {/* Navigation */}

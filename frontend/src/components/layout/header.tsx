@@ -1,6 +1,6 @@
 'use client';
 
-import { Moon, Sun, Bell, LogOut, User } from 'lucide-react';
+import { Moon, Sun, LogOut, User } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -12,6 +12,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { NotificationBell } from '@/components/notification-bell';
 
 export function Header() {
     const { theme, setTheme } = useTheme();
@@ -38,10 +39,8 @@ export function Header() {
                     <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
                 </Button>
 
-                {/* Notifications placeholder */}
-                <Button variant="ghost" size="icon" aria-label="Notifications">
-                    <Bell className="h-4 w-4" />
-                </Button>
+                {/* Notifications */}
+                <NotificationBell />
 
                 {/* User menu */}
                 <DropdownMenu>

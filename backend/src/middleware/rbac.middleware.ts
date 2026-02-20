@@ -5,6 +5,7 @@ import type { Role } from '@prisma/client';
 const ROLE_HIERARCHY: Record<Role, number> = {
     ADMIN: 50,
     EDITOR: 40,
+    MODERATOR: 35,
     ARCHIVIST: 30,
     MEMBER: 20,
     GUEST: 10,

@@ -3,35 +3,15 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, User, Heart, Image, FileText, History, Lock } from 'lucide-react';
+import { ArrowLeft, User, Heart, Image, FileText, History, Lock, Phone, MapPin, Briefcase, GraduationCap, Tag } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
-import { MOCK_PEOPLE } from '@/lib/mock-genealogy';
+import { MOCK_PEOPLE, zodiacYear } from '@/lib/mock-genealogy';
+import type { PersonDetail } from '@/lib/mock-genealogy';
 
-interface PersonDetail {
-    handle: string;
-    gramps_id: string;
-    gender: number;
-    displayName: string;
-    surname: string;
-    firstName: string;
-    birthYear?: number;
-    birthDate?: string;
-    birthPlace?: string;
-    deathYear?: number;
-    deathDate?: string;
-    deathPlace?: string;
-    isLiving: boolean;
-    isPrivacyFiltered: boolean;
-    _privacyNote?: string;
-    families?: string[];
-    parentFamilies?: string[];
-    mediaCount?: number;
-    phone?: string;
-}
 
 export default function PersonProfilePage() {
     const params = useParams();
@@ -142,15 +122,20 @@ export default function PersonProfilePage() {
 
                 {/* Overview */}
                 <TabsContent value="overview" className="space-y-4">
+                    {/* Thông tin cá nhân */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">Thông tin cá nhân</CardTitle>
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <User className="h-4 w-4" /> Thông tin cá nhân
+                            </CardTitle>
                         </CardHeader>
                         <CardContent className="grid gap-4 md:grid-cols-2">
                             <InfoRow label="Họ" value={person.surname || '—'} />
                             <InfoRow label="Tên" value={person.firstName || '—'} />
                             <InfoRow label="Giới tính" value={genderLabel} />
+                            {person.nickName && <InfoRow label="Tên thường gọi" value={person.nickName} />}
                             <InfoRow label="Ngày sinh" value={person.birthDate || (person.birthYear ? `${person.birthYear}` : '—')} />
+                            {person.birthYear && <InfoRow label="Năm âm lịch" value={zodiacYear(person.birthYear) || '—'} />}
                             <InfoRow label="Nơi sinh" value={person.birthPlace || '—'} />
                             {!person.isLiving && (
                                 <>
@@ -158,9 +143,109 @@ export default function PersonProfilePage() {
                                     <InfoRow label="Nơi mất" value={person.deathPlace || '—'} />
                                 </>
                             )}
-                            {person.phone && <InfoRow label="Điện thoại" value={person.phone} />}
                         </CardContent>
                     </Card>
+
+                    {/* Liên hệ */}
+                    {(person.phone || person.email || person.zalo || person.facebook) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Phone className="h-4 w-4" /> Liên hệ
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid gap-4 md:grid-cols-2">
+                                {person.phone && <InfoRow label="Điện thoại" value={person.phone} />}
+                                {person.email && <InfoRow label="Email" value={person.email} />}
+                                {person.zalo && <InfoRow label="Zalo" value={person.zalo} />}
+                                {person.facebook && <InfoRow label="Facebook" value={person.facebook} />}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Địa chỉ */}
+                    {(person.hometown || person.currentAddress) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <MapPin className="h-4 w-4" /> Địa chỉ
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid gap-4 md:grid-cols-2">
+                                {person.hometown && <InfoRow label="Quê quán" value={person.hometown} />}
+                                {person.currentAddress && <InfoRow label="Nơi ở hiện tại" value={person.currentAddress} />}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Nghề nghiệp & Học vấn */}
+                    {(person.occupation || person.company || person.education) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Briefcase className="h-4 w-4" /> Nghề nghiệp & Học vấn
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="grid gap-4 md:grid-cols-2">
+                                {person.occupation && <InfoRow label="Nghề nghiệp" value={person.occupation} />}
+                                {person.company && <InfoRow label="Nơi công tác" value={person.company} />}
+                                {person.education && (
+                                    <div className="flex items-start gap-2">
+                                        <GraduationCap className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                                        <div>
+                                            <p className="text-xs font-medium text-muted-foreground">Học vấn</p>
+                                            <p className="text-sm">{person.education}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Tiểu sử & Ghi chú */}
+                    {(person.biography || person.notes) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <FileText className="h-4 w-4" /> Tiểu sử & Ghi chú
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                                {person.biography && (
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground mb-1">Tiểu sử</p>
+                                        <p className="text-sm leading-relaxed">{person.biography}</p>
+                                    </div>
+                                )}
+                                {person.notes && (
+                                    <div>
+                                        <p className="text-xs font-medium text-muted-foreground mb-1">Ghi chú</p>
+                                        <p className="text-sm leading-relaxed text-muted-foreground">{person.notes}</p>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Tags */}
+                    {person.tags && person.tags.length > 0 && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-base flex items-center gap-2">
+                                    <Tag className="h-4 w-4" /> Nhãn
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex flex-wrap gap-2">
+                                    {person.tags.map(tag => (
+                                        <Badge key={tag} variant="secondary" className="text-xs">
+                                            {tag}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </TabsContent>
 
                 {/* Relationships */}

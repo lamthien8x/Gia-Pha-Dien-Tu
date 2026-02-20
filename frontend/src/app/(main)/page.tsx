@@ -8,7 +8,7 @@ export default function HomePage() {
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">Trang chủ</h1>
                 <p className="text-muted-foreground">
-                    Chào mừng đến với ClanHub — Nền tảng gia phả dòng họ Lê Huy
+                    Chào mừng đến với Gia phả dòng họ Lê Huy
                 </p>
             </div>
 

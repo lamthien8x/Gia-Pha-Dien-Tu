@@ -9,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'ClanHub — Nền tảng gia phả dòng họ',
-  description: 'ClanHub (GiaPhaHub) — Quản lý gia phả & kết nối cộng đồng dòng họ Lê Huy',
+  title: 'Gia phả dòng họ Lê Huy',
+  description: 'Gia phả dòng họ Lê Huy — Quản lý gia phả & kết nối cộng đồng dòng họ',
 };
 
 export default function RootLayout({

@@ -50,3 +50,9 @@ development_status:
   4-3-frontend-audit-page: done
   4-4-frontend-backup-page: done
   epic-4-retrospective: optional
+
+  epic-5: done
+  5-1-genealogy-book-export: done
+
+  epic-6: backlog
+  6-1-member-management-approval: planned

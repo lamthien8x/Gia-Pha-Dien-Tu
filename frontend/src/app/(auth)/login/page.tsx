@@ -54,7 +54,7 @@ export default function LoginPage() {
                         <TreePine className="h-8 w-8 text-primary" />
                     </div>
                 </div>
-                <CardTitle className="text-2xl font-bold">ClanHub</CardTitle>
+                <CardTitle className="text-2xl font-bold">Gia phả họ Lê</CardTitle>
                 <CardDescription>Đăng nhập vào nền tảng gia phả dòng họ</CardDescription>
             </CardHeader>
             <CardContent>

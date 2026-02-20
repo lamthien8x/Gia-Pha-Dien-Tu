@@ -14,6 +14,11 @@ import { genealogyRoutes } from './modules/genealogy/routes';
 import { mediaRoutes } from './modules/media/routes';
 import { auditRoutes } from './modules/audit/routes';
 import { backupRoutes } from './modules/backup/routes';
+import { membersRoutes } from './modules/members/routes';
+import { directoryRoutes } from './modules/directory/routes';
+import { postsRoutes } from './modules/posts/routes';
+import { eventsRoutes } from './modules/events/routes';
+import { notificationsRoutes } from './modules/notifications/routes';
 
 const app = express();
 
@@ -55,6 +60,11 @@ app.use('/api/genealogy', genealogyRoutes);
 app.use('/api/media', mediaRoutes);
 app.use('/api/audit', auditRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/members', membersRoutes);
+app.use('/api/directory', directoryRoutes);
+app.use('/api/posts', postsRoutes);
+app.use('/api/events', eventsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 
 // === 404 Handler ===
 app.use('/api/*', (_req, res) => {

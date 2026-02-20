@@ -76,6 +76,21 @@ services:
       retries: 5
       start_period: 30s
 
+  # === Redis (for BullMQ + Socket.IO) ===
+  redis:
+    image: redis:7-alpine
+    container_name: clanhub-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   # === Backend API ===
   backend:
     build:
@@ -97,6 +112,7 @@ services:
       S3_SECRET_KEY: minioadmin
       S3_BUCKET: clanhub-media
       CORS_ORIGIN: http://localhost:3000
+      REDIS_URL: redis://redis:6379
     volumes:
       - ./backend/src:/app/src
       - ./backend/prisma:/app/prisma
@@ -148,6 +164,7 @@ services:
 volumes:
   postgres_data:
   minio_data:
+  redis_data:
   gramps_data:
   gramps_media:
   gramps_tmp:

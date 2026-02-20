@@ -55,6 +55,7 @@ export interface TreeFamily {
     children: string[];
 }
 
+
 export interface PersonDetail {
     handle: string;
     gramps_id: string;
@@ -74,6 +75,42 @@ export interface PersonDetail {
     families?: string[];
     parentFamilies?: string[];
     mediaCount?: number;
+
+    // ── Contact ──
+    phone?: string;
+    email?: string;
+    zalo?: string;
+    facebook?: string;
+
+    // ── Address ──
+    currentAddress?: string;
+    hometown?: string;
+
+    // ── Professional ──
+    occupation?: string;
+    company?: string;
+
+    // ── Education ──
+    education?: string;
+
+    // ── Identity ──
+    nickName?: string;
+
+    // ── Notes & Matching ──
+    notes?: string;
+    biography?: string;
+    tags?: string[];
+    _privacyNote?: string;
+}
+
+// ═══ Zodiac Year Helper ═══
+const CAN = ['Canh', 'Tân', 'Nhâm', 'Quý', 'Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ'];
+const CHI = ['Thân', 'Dậu', 'Tuất', 'Hợi', 'Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi'];
+
+
+export function zodiacYear(year?: number): string | undefined {
+    if (!year) return undefined;
+    return `${CAN[year % 10]} ${CHI[year % 12]}`;
 }
 
 // ════════════════════════════════════════════════════════════════════════
@@ -208,7 +245,13 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         handle: 'P16', gramps_id: 'I16', gender: 1,
         displayName: 'Lê Minh Tuấn', surname: 'Lê', firstName: 'Minh Tuấn',
         birthYear: 1970, isLiving: true, isPrivacyFiltered: true, isPatrilineal: true,
-        families: ['F07'], parentFamilies: ['F04']
+        families: ['F07'], parentFamilies: ['F04'],
+        nickName: 'Tuấn', phone: '0912 345 678', email: 'tuan.le@gmail.com',
+        hometown: 'Hà Tĩnh', currentAddress: 'Quận Cầu Giấy, Hà Nội',
+        occupation: 'Kỹ sư cầu đường', company: 'Tổng Công ty XDCTGT',
+        education: 'ĐH Xây dựng Hà Nội',
+        biography: 'Con trưởng dòng Lê Văn Đức, sinh sống tại Hà Nội từ năm 1992.',
+        tags: ['Hà Nội', 'kỹ sư', 'đời 4'],
     },
 
     {
@@ -237,7 +280,12 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         handle: 'P20', gramps_id: 'I20', gender: 1,
         displayName: 'Lê Thành Trung', surname: 'Lê', firstName: 'Thành Trung',
         birthYear: 1974, isLiving: true, isPrivacyFiltered: true, isPatrilineal: true,
-        families: ['F08'], parentFamilies: ['F05']
+        families: ['F08'], parentFamilies: ['F05'],
+        phone: '0909 111 222', email: 'trung.le74@yahoo.com',
+        hometown: 'Hà Tĩnh', currentAddress: 'TP. Hồ Chí Minh',
+        occupation: 'Giám đốc kinh doanh', company: 'Công ty TNHH Hoàng Gia',
+        education: 'ĐH Kinh tế TP.HCM',
+        tags: ['HCM', 'kinh doanh', 'đời 4'],
     },
 
     {
@@ -252,7 +300,12 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         handle: 'P22', gramps_id: 'I22', gender: 1,
         displayName: 'Lê Văn Nam', surname: 'Lê', firstName: 'Văn Nam',
         birthYear: 1978, isLiving: true, isPrivacyFiltered: true, isPatrilineal: true,
-        families: ['F09'], parentFamilies: ['F06']
+        families: ['F09'], parentFamilies: ['F06'],
+        phone: '0933 456 789',
+        hometown: 'Hà Tĩnh', currentAddress: 'Đà Nẵng',
+        occupation: 'Bác sĩ', company: 'Bệnh viện Đà Nẵng',
+        education: 'ĐH Y Huế',
+        tags: ['Đà Nẵng', 'y tế', 'đời 4'],
     },
 
     {
@@ -275,14 +328,26 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         handle: 'P25', gramps_id: 'I25', gender: 1,
         displayName: 'Lê Huy', surname: 'Lê', firstName: 'Huy',
         birthYear: 1998, isLiving: true, isPrivacyFiltered: true, isPatrilineal: true,
-        families: [], parentFamilies: ['F07']
+        families: [], parentFamilies: ['F07'],
+        nickName: 'Huy', phone: '0368 123 456', email: 'lehuy98@gmail.com',
+        zalo: '0368123456', facebook: 'fb.com/lehuy98',
+        hometown: 'Hà Tĩnh', currentAddress: 'Quận 7, TP. Hồ Chí Minh',
+        occupation: 'Software Engineer', company: 'ClanHub',
+        education: 'ĐH Bách khoa TP.HCM',
+        biography: 'Cháu đời 5, hiện là kỹ sư phần mềm tại TP.HCM. Đam mê lưu giữ và số hóa gia phả dòng họ.',
+        tags: ['HCM', 'IT', 'đời 5', 'quản trị'],
     },
 
     {
         handle: 'P26', gramps_id: 'I26', gender: 2,
         displayName: 'Lê Thùy Linh', surname: 'Lê', firstName: 'Thùy Linh',
         birthYear: 2001, isLiving: true, isPrivacyFiltered: true, isPatrilineal: true,
-        families: [], parentFamilies: ['F07']
+        families: [], parentFamilies: ['F07'],
+        nickName: 'Linh', phone: '0385 789 012', email: 'linhle2001@gmail.com',
+        hometown: 'Hà Tĩnh', currentAddress: 'Hà Nội',
+        occupation: 'Sinh viên', company: 'ĐH Ngoại thương Hà Nội',
+        education: 'ĐH Ngoại thương',
+        tags: ['Hà Nội', 'sinh viên', 'đời 5'],
     },
 
     {
