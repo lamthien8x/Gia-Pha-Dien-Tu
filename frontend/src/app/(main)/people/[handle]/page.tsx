@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, User, Heart, Image, FileText, History, Lock, Phone, MapPin, Briefcase, GraduationCap, Tag } from 'lucide-react';
+import { ArrowLeft, User, Heart, Image, FileText, History, Lock, Phone, MapPin, Briefcase, GraduationCap, Tag, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
 import { MOCK_PEOPLE, zodiacYear } from '@/lib/mock-genealogy';
 import type { PersonDetail } from '@/lib/mock-genealogy';
+import { CommentSection } from '@/components/comment-section';
 
 
 export default function PersonProfilePage() {
@@ -119,6 +120,9 @@ export default function PersonProfilePage() {
                     </TabsTrigger>
                     <TabsTrigger value="history" className="gap-1">
                         <History className="h-3.5 w-3.5" /> Lịch sử
+                    </TabsTrigger>
+                    <TabsTrigger value="comments" className="gap-1">
+                        <MessageCircle className="h-3.5 w-3.5" /> Bình luận
                     </TabsTrigger>
                 </TabsList>
 
@@ -311,6 +315,20 @@ export default function PersonProfilePage() {
                             <p className="text-muted-foreground text-sm">
                                 Audit log cho entity này sẽ được bổ sung trong Epic 4.
                             </p>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Comments */}
+                <TabsContent value="comments">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <MessageCircle className="h-4 w-4" /> Bình luận
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <CommentSection personHandle={handle} />
                         </CardContent>
                     </Card>
                 </TabsContent>
