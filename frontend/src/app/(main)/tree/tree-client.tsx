@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
-import { Search, ZoomIn, ZoomOut, Maximize2, TreePine, Eye, Users, GitBranch, User, ArrowDownToLine, ArrowUpFromLine, Crosshair, X, ChevronDown, ChevronRight, BarChart3, Package, Link, ChevronsDownUp, ChevronsUpDown, Copy, Pencil, Save, RotateCcw, Trash2, ArrowUp, ArrowDown, GripVertical } from 'lucide-react';
+import { ContributeDialog } from '@/components/contribute-dialog';
+import { Search, ZoomIn, ZoomOut, Maximize2, TreePine, Eye, Users, GitBranch, User, ArrowDownToLine, ArrowUpFromLine, Crosshair, X, ChevronDown, ChevronRight, BarChart3, Package, Link, ChevronsDownUp, ChevronsUpDown, Copy, Pencil, Save, RotateCcw, Trash2, ArrowUp, ArrowDown, GripVertical, MessageSquarePlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -176,6 +177,7 @@ export default function TreeViewPage() {
     const [highlightHandles, setHighlightHandles] = useState<Set<string>>(new Set());
     const [hoveredHandle, setHoveredHandle] = useState<string | null>(null);
     const [contextMenu, setContextMenu] = useState<{ handle: string; x: number; y: number } | null>(null);
+    const [contributePerson, setContributePerson] = useState<{ handle: string; name: string } | null>(null);
     const [linkCopied, setLinkCopied] = useState(false);
 
     // F4: Collapsible branches
@@ -905,6 +907,7 @@ export default function TreeViewPage() {
                                         onSetFocus={() => { panToPerson(person.handle); setContextMenu(null); }}
                                         onShowFull={() => { setViewMode('full'); setContextMenu(null); }}
                                         onCopyLink={() => { copyTreeLink(person.handle); setContextMenu(null); }}
+                                        onContribute={() => { setContributePerson({ handle: person.handle, name: person.displayName }); setContextMenu(null); }}
                                         onClose={() => setContextMenu(null)}
                                     />
                                 );
@@ -1013,12 +1016,20 @@ export default function TreeViewPage() {
                 <span className="flex items-center gap-1 opacity-60"><span className="w-2.5 h-2.5 rounded-sm bg-slate-200 border border-slate-400" /> Đã mất</span>
                 <span className="ml-auto opacity-50">Cuộn để zoom • Kéo để di chuyển • Nhấn để xem</span>
             </div>
+            {/* Contribute dialog */}
+            {contributePerson && (
+                <ContributeDialog
+                    personHandle={contributePerson.handle}
+                    personName={contributePerson.name}
+                    onClose={() => setContributePerson(null)}
+                />
+            )}
         </div>
     );
 }
 
 // === Card Context Menu ===
-function CardContextMenu({ person, x, y, onViewDetail, onShowDescendants, onShowAncestors, onSetFocus, onShowFull, onCopyLink, onClose }: {
+function CardContextMenu({ person, x, y, onViewDetail, onShowDescendants, onShowAncestors, onSetFocus, onShowFull, onCopyLink, onContribute, onClose }: {
     person: TreeNode;
     x: number;
     y: number;
@@ -1028,6 +1039,7 @@ function CardContextMenu({ person, x, y, onViewDetail, onShowDescendants, onShow
     onSetFocus: () => void;
     onShowFull: () => void;
     onCopyLink: () => void;
+    onContribute: () => void;
     onClose: () => void;
 }) {
     return (
@@ -1063,6 +1075,8 @@ function CardContextMenu({ person, x, y, onViewDetail, onShowDescendants, onShow
                     <div className="border-t border-slate-100 my-1" />
                     <MenuAction icon={<Link className="w-4 h-4" />} label="Sao chép link hậu duệ" desc="Chia sẻ link cây con cháu" onClick={onCopyLink} />
                     <MenuAction icon={<Eye className="w-4 h-4" />} label="Toàn cảnh" desc="Hiển thị toàn bộ cây" onClick={onShowFull} />
+                    <div className="border-t border-slate-100 my-1" />
+                    <MenuAction icon={<MessageSquarePlus className="w-4 h-4" />} label="Đóng góp thông tin" desc="Bổ sung thông tin về người này" onClick={onContribute} />
                 </div>
             </div>
         </div>

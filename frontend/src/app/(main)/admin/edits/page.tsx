@@ -1,336 +1,183 @@
 'use client';
 
-import { useState } from 'react';
-import { ClipboardCheck, CheckCircle2, XCircle, Eye, Clock, Filter } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Check, X, Clock, MessageSquarePlus, ChevronDown, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
-import {
-    Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle,
-} from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/auth-provider';
+import { useRouter } from 'next/navigation';
 
-// ── Mock data for edit requests ──
-interface EditRequest {
+interface Contribution {
     id: string;
-    requesterName: string;
-    requesterRole: string;
-    targetHandle: string;
-    targetName: string;
-    editType: string;
-    fieldChanges: Record<string, { old: string; new: string }>;
-    reason?: string;
-    status: 'PENDING' | 'APPROVED' | 'REJECTED';
-    reviewerName?: string;
-    reviewNote?: string;
-    createdAt: string;
-    reviewedAt?: string;
+    author_id: string;
+    author_email: string;
+    person_handle: string;
+    person_name: string;
+    field_name: string;
+    field_label: string;
+    old_value: string | null;
+    new_value: string;
+    note: string | null;
+    status: 'pending' | 'approved' | 'rejected';
+    admin_note: string | null;
+    created_at: string;
+    reviewed_at: string | null;
 }
 
-const MOCK_EDITS: EditRequest[] = [
-    {
-        id: 'e1',
-        requesterName: 'Lê Huy',
-        requesterRole: 'MEMBER',
-        targetHandle: 'P16',
-        targetName: 'Lê Minh Phong',
-        editType: 'UPDATE_PERSON',
-        fieldChanges: {
-            phone: { old: '—', new: '0912 345 678' },
-            occupation: { old: '—', new: 'Giáo viên' },
-        },
-        reason: 'Cập nhật thông tin liên hệ của ba',
-        status: 'PENDING',
-        createdAt: '2026-02-20T00:30:00',
-    },
-    {
-        id: 'e2',
-        requesterName: 'Lê Huy',
-        requesterRole: 'MEMBER',
-        targetHandle: 'P25',
-        targetName: 'Lê Huy',
-        editType: 'UPDATE_PERSON',
-        fieldChanges: {
-            email: { old: 'lehuy98@gmail.com', new: 'lehuy.dev@gmail.com' },
-        },
-        status: 'APPROVED',
-        reviewerName: 'Admin',
-        reviewNote: 'OK, đã xác minh',
-        createdAt: '2026-02-19T22:00:00',
-        reviewedAt: '2026-02-19T23:00:00',
-    },
-    {
-        id: 'e3',
-        requesterName: 'Lê Thành Trung',
-        requesterRole: 'EDITOR',
-        targetHandle: 'P01',
-        targetName: 'Lê Văn Tổ',
-        editType: 'UPDATE_PERSON',
-        fieldChanges: {
-            birthPlace: { old: '—', new: 'Hà Tĩnh' },
-            biography: { old: '—', new: 'Thủy tổ dòng họ Lê Huy, quê gốc Hà Tĩnh.' },
-        },
-        reason: 'Bổ sung thông tin thủy tổ từ sách gia phả cũ',
-        status: 'APPROVED',
-        reviewerName: 'Auto-approved',
-        reviewNote: 'Auto-approved (bypass role)',
-        createdAt: '2026-02-19T20:00:00',
-        reviewedAt: '2026-02-19T20:00:00',
-    },
-    {
-        id: 'e4',
-        requesterName: 'Lê Huy',
-        requesterRole: 'MEMBER',
-        targetHandle: 'P17',
-        targetName: 'Trần Thị Hà',
-        editType: 'UPDATE_PERSON',
-        fieldChanges: {
-            phone: { old: '—', new: '0987 111 222' },
-            hometown: { old: '—', new: 'Nghệ An' },
-        },
-        status: 'REJECTED',
-        reviewerName: 'Admin',
-        reviewNote: 'Số điện thoại không chính xác, vui lòng kiểm tra lại',
-        createdAt: '2026-02-19T18:00:00',
-        reviewedAt: '2026-02-19T19:00:00',
-    },
-];
-
-const STATUS_CONFIG: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; icon: typeof Clock }> = {
-    PENDING: { label: 'Chờ duyệt', variant: 'outline', icon: Clock },
-    APPROVED: { label: 'Đã duyệt', variant: 'default', icon: CheckCircle2 },
-    REJECTED: { label: 'Từ chối', variant: 'destructive', icon: XCircle },
-};
-
-const EDIT_TYPE_LABELS: Record<string, string> = {
-    UPDATE_PERSON: 'Cập nhật',
-    CREATE_PERSON: 'Thêm mới',
-    DELETE_PERSON: 'Xóa',
-    ADD_SPOUSE: 'Thêm vợ/chồng',
-};
-
 export default function AdminEditsPage() {
-    const [filterStatus, setFilterStatus] = useState<string>('ALL');
-    const [selectedEdit, setSelectedEdit] = useState<EditRequest | null>(null);
-    const [reviewNote, setReviewNote] = useState('');
+    const { isAdmin, loading: authLoading, user } = useAuth();
+    const router = useRouter();
+    const [contributions, setContributions] = useState<Contribution[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
+    const [processingId, setProcessingId] = useState<string | null>(null);
+    const [adminNotes, setAdminNotes] = useState<Record<string, string>>({});
 
-    const filteredEdits = filterStatus === 'ALL'
-        ? MOCK_EDITS
-        : MOCK_EDITS.filter(e => e.status === filterStatus);
+    const fetchContributions = useCallback(async () => {
+        setLoading(true);
+        let query = supabase.from('contributions').select('*').order('created_at', { ascending: false });
+        if (filter !== 'all') query = query.eq('status', filter);
+        const { data } = await query;
+        setContributions((data as Contribution[]) || []);
+        setLoading(false);
+    }, [filter]);
 
-    const pendingCount = MOCK_EDITS.filter(e => e.status === 'PENDING').length;
-
-    const handleApprove = (edit: EditRequest) => {
-        // TODO: API call
-        alert(`Đã duyệt yêu cầu ${edit.id}`);
-        setSelectedEdit(null);
-        setReviewNote('');
-    };
-
-    const handleReject = (edit: EditRequest) => {
-        if (!reviewNote.trim()) {
-            alert('Vui lòng nhập lý do từ chối');
+    useEffect(() => {
+        if (!authLoading && !isAdmin) {
+            router.push('/tree');
             return;
         }
-        // TODO: API call
-        alert(`Đã từ chối yêu cầu ${edit.id}: ${reviewNote}`);
-        setSelectedEdit(null);
-        setReviewNote('');
+        if (!authLoading && isAdmin) fetchContributions();
+    }, [authLoading, isAdmin, fetchContributions, router]);
+
+    const handleAction = async (id: string, action: 'approved' | 'rejected') => {
+        setProcessingId(id);
+        await supabase.from('contributions').update({
+            status: action,
+            admin_note: adminNotes[id] || null,
+            reviewed_by: user?.id,
+            reviewed_at: new Date().toISOString(),
+        }).eq('id', id);
+        setProcessingId(null);
+        fetchContributions();
     };
 
+    const statusColors = {
+        pending: 'bg-amber-100 text-amber-700 border-amber-200',
+        approved: 'bg-green-100 text-green-700 border-green-200',
+        rejected: 'bg-red-100 text-red-700 border-red-200',
+    };
+
+    const statusLabels = {
+        pending: 'Chờ duyệt',
+        approved: 'Đã duyệt',
+        rejected: 'Từ chối',
+    };
+
+    const pendingCount = contributions.filter(c => c.status === 'pending').length;
+
+    if (authLoading) return <div className="flex items-center justify-center h-96"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>;
+
     return (
-        <div className="space-y-6">
-            {/* Header */}
+        <div className="max-w-4xl mx-auto p-4 space-y-4">
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                        <ClipboardCheck className="h-6 w-6" />
-                        Kiểm duyệt thông tin
+                    <h1 className="text-xl font-bold flex items-center gap-2">
+                        <MessageSquarePlus className="h-5 w-5" /> Đóng góp từ thành viên
                     </h1>
-                    <p className="text-muted-foreground">
-                        Duyệt các yêu cầu chỉnh sửa từ thành viên
-                        {pendingCount > 0 && (
-                            <Badge variant="destructive" className="ml-2">
-                                {pendingCount} chờ duyệt
-                            </Badge>
-                        )}
+                    <p className="text-sm text-muted-foreground">
+                        {pendingCount > 0 ? `${pendingCount} đóng góp chờ duyệt` : 'Không có đóng góp nào chờ duyệt'}
                     </p>
+                </div>
+                <div className="flex items-center gap-1 border rounded-lg overflow-hidden text-xs">
+                    {(['pending', 'approved', 'rejected', 'all'] as const).map(f => (
+                        <button key={f} onClick={() => setFilter(f)}
+                            className={`px-3 py-1.5 font-medium transition-colors ${filter === f ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
+                            {f === 'all' ? 'Tất cả' : statusLabels[f]}
+                        </button>
+                    ))}
                 </div>
             </div>
 
-            {/* Filter tabs */}
-            <div className="flex gap-2">
-                {['ALL', 'PENDING', 'APPROVED', 'REJECTED'].map(s => (
-                    <Button
-                        key={s}
-                        variant={filterStatus === s ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setFilterStatus(s)}
-                        className="gap-1"
-                    >
-                        {s === 'ALL' && <Filter className="h-3 w-3" />}
-                        {s === 'ALL' ? 'Tất cả' : STATUS_CONFIG[s].label}
-                        <Badge variant="secondary" className="ml-1 text-xs">
-                            {s === 'ALL' ? MOCK_EDITS.length : MOCK_EDITS.filter(e => e.status === s).length}
-                        </Badge>
-                    </Button>
-                ))}
-            </div>
-
-            {/* Table */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Danh sách yêu cầu</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Người gửi</TableHead>
-                                <TableHead>Đối tượng</TableHead>
-                                <TableHead>Loại</TableHead>
-                                <TableHead>Thay đổi</TableHead>
-                                <TableHead>Ngày gửi</TableHead>
-                                <TableHead>Trạng thái</TableHead>
-                                <TableHead className="w-20"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {filteredEdits.map(edit => {
-                                const statusCfg = STATUS_CONFIG[edit.status];
-                                const StatusIcon = statusCfg.icon;
-                                const changeCount = Object.keys(edit.fieldChanges).length;
-                                return (
-                                    <TableRow key={edit.id}>
-                                        <TableCell>
-                                            <div>
-                                                <span className="font-medium">{edit.requesterName}</span>
-                                                <span className="text-xs text-muted-foreground ml-1">{edit.requesterRole}</span>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="font-medium">{edit.targetName}</span>
-                                            <span className="text-xs text-muted-foreground ml-1">({edit.targetHandle})</span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="secondary">{EDIT_TYPE_LABELS[edit.editType] || edit.editType}</Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <span className="text-sm">{changeCount} trường</span>
-                                        </TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">
-                                            {new Date(edit.createdAt).toLocaleDateString('vi-VN')}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={statusCfg.variant} className="gap-1">
-                                                <StatusIcon className="h-3 w-3" />
-                                                {statusCfg.label}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => { setSelectedEdit(edit); setReviewNote(''); }}
-                                            >
-                                                <Eye className="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                );
-                            })}
-                            {filteredEdits.length === 0 && (
-                                <TableRow>
-                                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                                        Không có yêu cầu nào
-                                    </TableCell>
-                                </TableRow>
-                            )}
-                        </TableBody>
-                    </Table>
-                </CardContent>
-            </Card>
-
-            {/* Detail Dialog */}
-            <Dialog open={!!selectedEdit} onOpenChange={() => setSelectedEdit(null)}>
-                <DialogContent className="max-w-lg">
-                    <DialogHeader>
-                        <DialogTitle>Chi tiết yêu cầu chỉnh sửa</DialogTitle>
-                        <DialogDescription>
-                            {selectedEdit?.requesterName} → {selectedEdit?.targetName} ({selectedEdit?.targetHandle})
-                        </DialogDescription>
-                    </DialogHeader>
-                    {selectedEdit && (
-                        <div className="space-y-4">
-                            {/* Edit Type & Reason */}
-                            <div className="flex items-center gap-2">
-                                <Badge variant="secondary">{EDIT_TYPE_LABELS[selectedEdit.editType]}</Badge>
-                                {selectedEdit.reason && (
-                                    <span className="text-sm text-muted-foreground italic">"{selectedEdit.reason}"</span>
-                                )}
-                            </div>
-
-                            {/* Field Changes Diff */}
-                            <div className="space-y-2">
-                                <p className="text-sm font-medium">Thay đổi:</p>
-                                <div className="rounded-md border divide-y">
-                                    {Object.entries(selectedEdit.fieldChanges).map(([field, change]) => (
-                                        <div key={field} className="p-3 text-sm">
-                                            <span className="font-medium text-muted-foreground">{field}</span>
-                                            <div className="mt-1 flex items-center gap-2">
-                                                <span className="line-through text-red-500">{change.old || '—'}</span>
-                                                <span>→</span>
-                                                <span className="text-green-600 font-medium">{change.new}</span>
-                                            </div>
+            {loading ? (
+                <div className="flex items-center justify-center h-48">
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                </div>
+            ) : contributions.length === 0 ? (
+                <Card>
+                    <CardContent className="flex items-center justify-center h-48 text-muted-foreground">
+                        <p className="text-sm">Không có đóng góp nào {filter !== 'all' ? `(${statusLabels[filter]})` : ''}</p>
+                    </CardContent>
+                </Card>
+            ) : (
+                <div className="space-y-3">
+                    {contributions.map(c => (
+                        <Card key={c.id} className={`transition-all ${c.status === 'pending' ? 'border-amber-300 shadow-sm' : ''}`}>
+                            <CardContent className="p-4">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="flex-1 min-w-0 space-y-2">
+                                        {/* Header */}
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                            <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${statusColors[c.status]}`}>
+                                                {statusLabels[c.status]}
+                                            </span>
+                                            <span className="text-xs font-semibold">{c.person_name || c.person_handle}</span>
+                                            <span className="text-xs text-muted-foreground">→ {c.field_label || c.field_name}</span>
                                         </div>
-                                    ))}
-                                </div>
-                            </div>
 
-                            {/* Existing review info */}
-                            {selectedEdit.status !== 'PENDING' && (
-                                <div className="p-3 rounded-md bg-muted text-sm">
-                                    <p><strong>Người duyệt:</strong> {selectedEdit.reviewerName}</p>
-                                    {selectedEdit.reviewNote && <p><strong>Ghi chú:</strong> {selectedEdit.reviewNote}</p>}
-                                    <p><strong>Ngày duyệt:</strong> {new Date(selectedEdit.reviewedAt!).toLocaleString('vi-VN')}</p>
-                                </div>
-                            )}
+                                        {/* Value */}
+                                        <div className="bg-muted/50 rounded-lg p-3">
+                                            <p className="text-xs font-medium text-muted-foreground mb-1">Giá trị mới:</p>
+                                            <p className="text-sm font-medium">{c.new_value}</p>
+                                            {c.note && (
+                                                <p className="text-xs text-muted-foreground mt-2 italic">📝 {c.note}</p>
+                                            )}
+                                        </div>
 
-                            {/* Review actions (PENDING only) */}
-                            {selectedEdit.status === 'PENDING' && (
-                                <div className="space-y-3 pt-2 border-t">
-                                    <Textarea
-                                        placeholder="Ghi chú khi duyệt/từ chối (bắt buộc khi từ chối)..."
-                                        value={reviewNote}
-                                        onChange={e => setReviewNote(e.target.value)}
-                                        rows={2}
-                                    />
-                                    <div className="flex gap-2">
-                                        <Button
-                                            className="flex-1"
-                                            onClick={() => handleApprove(selectedEdit)}
-                                        >
-                                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                                            Duyệt
-                                        </Button>
-                                        <Button
-                                            variant="destructive"
-                                            className="flex-1"
-                                            onClick={() => handleReject(selectedEdit)}
-                                        >
-                                            <XCircle className="mr-2 h-4 w-4" />
-                                            Từ chối
-                                        </Button>
+                                        {/* Meta */}
+                                        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                                            <span>Từ: {c.author_email}</span>
+                                            <span>•</span>
+                                            <span>{new Date(c.created_at).toLocaleString('vi-VN')}</span>
+                                        </div>
+
+                                        {/* Admin note */}
+                                        {c.admin_note && (
+                                            <p className="text-xs bg-blue-50 dark:bg-blue-950/30 rounded p-2 text-blue-700 dark:text-blue-400">
+                                                💬 Admin: {c.admin_note}
+                                            </p>
+                                        )}
                                     </div>
+
+                                    {/* Actions for pending */}
+                                    {c.status === 'pending' && (
+                                        <div className="flex flex-col gap-1.5 flex-shrink-0">
+                                            <Input
+                                                placeholder="Ghi chú..."
+                                                className="text-xs h-7 w-32"
+                                                value={adminNotes[c.id] || ''}
+                                                onChange={e => setAdminNotes(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                            />
+                                            <Button size="sm" className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                                disabled={processingId === c.id}
+                                                onClick={() => handleAction(c.id, 'approved')}>
+                                                <Check className="w-3 h-3 mr-1" /> Duyệt
+                                            </Button>
+                                            <Button size="sm" variant="outline" className="h-7 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                                                disabled={processingId === c.id}
+                                                onClick={() => handleAction(c.id, 'rejected')}>
+                                                <X className="w-3 h-3 mr-1" /> Từ chối
+                                            </Button>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    )}
-                </DialogContent>
-            </Dialog>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
