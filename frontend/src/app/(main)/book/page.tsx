@@ -174,7 +174,7 @@ export default function BookPage() {
     sections.push({ id: 'closing', label: 'Kết sách', pageNum: pageCounter++ });
 
     return (
-        <>
+        <div className="min-w-0 w-full overflow-hidden">
             {/* ═══ TOOLBAR ═══ */}
             <div className="no-print sticky top-0 z-50 bg-white/95 backdrop-blur-lg border-b shadow-sm">
                 <div className="px-4 py-2.5 flex items-center justify-between">
@@ -240,16 +240,18 @@ export default function BookPage() {
 
                 {/* Preview quick-nav strip */}
                 {previewMode && (
-                    <div className="border-t bg-slate-50 px-4 py-2 flex gap-2 overflow-x-auto">
-                        {sections.map(s => (
-                            <a key={s.id} href={`#preview-${s.id}`}
-                                className="flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-medium
-                                    bg-white border hover:shadow-sm transition-all"
-                                style={{ borderColor: t.borderLight, color: t.primary }}>
-                                {s.label}
-                                <span className="ml-1 text-[10px] opacity-50">·{s.pageNum}</span>
-                            </a>
-                        ))}
+                    <div className="border-t bg-slate-50 px-4 py-2 overflow-hidden">
+                        <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin" style={{ maxWidth: '100%' }}>
+                            {sections.map(s => (
+                                <a key={s.id} href={`#preview-${s.id}`}
+                                    className="flex-shrink-0 px-2 py-1 rounded-md text-[11px] font-medium
+                                        bg-white border hover:shadow-sm transition-all whitespace-nowrap"
+                                    style={{ borderColor: t.borderLight, color: t.primary }}>
+                                    {s.label}
+                                    <span className="ml-0.5 text-[9px] opacity-50">·{s.pageNum}</span>
+                                </a>
+                            ))}
+                        </div>
                     </div>
                 )}
             </div>
@@ -348,7 +350,7 @@ export default function BookPage() {
                     }
                 }
             ` }} />
-        </>
+        </div>
     );
 }
 
