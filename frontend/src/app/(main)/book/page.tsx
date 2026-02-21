@@ -114,10 +114,65 @@ export default function BookPage() {
     }
     if (!bookData) return null;
 
-    // Paginate chapters: 2-col layout, optimized for A4 (297mm) pages
-    const FIRST_PAGE_LIMIT = 10;  // first page has header, fits ~10 members
-    const CONT_PAGE_LIMIT = 14;   // continuation pages fit ~14 members
-    const APPENDIX_PAGE_LIMIT = 50; // ~50 name entries per appendix page (2-col)
+    // ═══ Dynamic height-based pagination ═══
+    // A4 page: 297mm ≈ 1123px. Content area: px-12 py-12 = 48px each side
+    const PAGE_H = 1123 - 96; // ~1027px usable
+    const HEADER_H = 120;     // chapter header (title + subtitle + lines)
+    const CONT_LABEL_H = 36;  // "Đời X (tiếp theo)" label
+    const GRID_GAP = 16;      // gap-4 = 16px between grid rows
+
+    // Estimate height of a single PersonEntry based on content
+    function estimatePersonHeight(person: BookPerson): number {
+        let h = 56; // name + years + padding (p-4 + flex + rounding margin)
+        if (person.fatherName) h += 22;
+        if (person.motherName) h += 22;
+        if (person.spouseName) h += 22;
+        if (person.children.length > 0) {
+            h += 30; // "Con (N)" label + border-top + spacing
+            h += person.children.length * 20; // each child line
+        }
+        h += 12; // bottom margin safety
+        return h;
+    }
+
+    // Pack members into pages using 2-column grid row heights
+    function packChapterPages(members: BookPerson[], gen: number, roman: string): Section[] {
+        const result: Section[] = [];
+        let start = 0;
+        let pageIdx = 0;
+
+        while (start < members.length) {
+            const isFirst = pageIdx === 0;
+            const budget = PAGE_H - (isFirst ? HEADER_H : CONT_LABEL_H);
+            let usedH = 0;
+            let end = start;
+
+            while (end < members.length) {
+                // 2-col grid: members come in pairs (row = members[end] and members[end+1])
+                const leftH = estimatePersonHeight(members[end]);
+                const rightH = end + 1 < members.length ? estimatePersonHeight(members[end + 1]) : 0;
+                const rowH = Math.max(leftH, rightH) + GRID_GAP;
+
+                if (usedH + rowH > budget && end > start) break; // page full, but ensure at least 1 row
+                usedH += rowH;
+                end += (end + 1 < members.length) ? 2 : 1; // advance by pair
+            }
+
+            result.push({
+                id: pageIdx === 0 ? `gen-${gen}` : `gen-${gen}-p${pageIdx}`,
+                label: pageIdx === 0 ? `Đời ${roman}` : `Đời ${roman} (tt)`,
+                pageNum: 0, // filled later
+                chapterGen: gen,
+                memberStart: start,
+                memberEnd: end,
+                isFirstPage: isFirst,
+            });
+
+            start = end;
+            pageIdx++;
+        }
+        return result;
+    }
 
     interface Section {
         id: string;
@@ -127,7 +182,6 @@ export default function BookPage() {
         memberStart?: number;
         memberEnd?: number;
         isFirstPage?: boolean;
-        // For appendix pagination:
         appendixStart?: number;
         appendixEnd?: number;
         appendixIsFirst?: boolean;
@@ -140,39 +194,15 @@ export default function BookPage() {
 
     let pageCounter = 3;
     for (const ch of bookData.chapters) {
-        const total = ch.members.length;
-        if (total <= FIRST_PAGE_LIMIT) {
-            sections.push({
-                id: `gen-${ch.generation}`,
-                label: `Đời ${ch.romanNumeral}`,
-                pageNum: pageCounter++,
-                chapterGen: ch.generation,
-                memberStart: 0,
-                memberEnd: total,
-                isFirstPage: true,
-            });
-        } else {
-            let start = 0;
-            let pageIdx = 0;
-            while (start < total) {
-                const limit = pageIdx === 0 ? FIRST_PAGE_LIMIT : CONT_PAGE_LIMIT;
-                const end = Math.min(start + limit, total);
-                sections.push({
-                    id: `gen-${ch.generation}-p${pageIdx}`,
-                    label: pageIdx === 0 ? `Đời ${ch.romanNumeral}` : `Đời ${ch.romanNumeral} (tt)`,
-                    pageNum: pageCounter++,
-                    chapterGen: ch.generation,
-                    memberStart: start,
-                    memberEnd: end,
-                    isFirstPage: pageIdx === 0,
-                });
-                start = end;
-                pageIdx++;
-            }
+        const chapterPages = packChapterPages(ch.members, ch.generation, ch.romanNumeral);
+        for (const page of chapterPages) {
+            page.pageNum = pageCounter++;
+            sections.push(page);
         }
     }
 
-    // Paginate appendix: split all name entries across multiple pages
+    // Paginate appendix: ~40 entries per page (conservative for 2-col)
+    const APPENDIX_PAGE_LIMIT = 40;
     const allNames = bookData.nameIndex;
     const totalNames = allNames.length;
     if (totalNames <= APPENDIX_PAGE_LIMIT) {
@@ -181,8 +211,7 @@ export default function BookPage() {
         let aStart = 0;
         let aPage = 0;
         while (aStart < totalNames) {
-            // First appendix page has header, so fewer entries
-            const limit = aPage === 0 ? APPENDIX_PAGE_LIMIT - 10 : APPENDIX_PAGE_LIMIT;
+            const limit = aPage === 0 ? APPENDIX_PAGE_LIMIT - 8 : APPENDIX_PAGE_LIMIT;
             const aEnd = Math.min(aStart + limit, totalNames);
             sections.push({
                 id: aPage === 0 ? 'appendix' : `appendix-p${aPage}`,
