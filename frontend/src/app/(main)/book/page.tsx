@@ -201,8 +201,8 @@ export default function BookPage() {
         }
     }
 
-    // Paginate appendix: ~40 entries per page (conservative for 2-col)
-    const APPENDIX_PAGE_LIMIT = 40;
+    // Paginate appendix: each entry ~22px tall, 3-col layout, ~30 entries/col = ~90/page
+    const APPENDIX_PAGE_LIMIT = 90;
     const allNames = bookData.nameIndex;
     const totalNames = allNames.length;
     if (totalNames <= APPENDIX_PAGE_LIMIT) {
@@ -211,7 +211,7 @@ export default function BookPage() {
         let aStart = 0;
         let aPage = 0;
         while (aStart < totalNames) {
-            const limit = aPage === 0 ? APPENDIX_PAGE_LIMIT - 8 : APPENDIX_PAGE_LIMIT;
+            const limit = aPage === 0 ? APPENDIX_PAGE_LIMIT - 20 : APPENDIX_PAGE_LIMIT;
             const aEnd = Math.min(aStart + limit, totalNames);
             sections.push({
                 id: aPage === 0 ? 'appendix' : `appendix-p${aPage}`,
@@ -638,7 +638,7 @@ function AppendixContent({ bookData, theme: t, startIdx, endIdx, showHeader }: {
                 </h3>
             )}
 
-            <div className="columns-2 gap-6 text-sm font-serif">
+            <div className="columns-3 gap-4 text-[11px] font-serif">
                 {pageEntries.map((entry, i) => {
                     const globalIdx = start + i;
                     const isNgoaiStart = globalIdx === patriEnd;
