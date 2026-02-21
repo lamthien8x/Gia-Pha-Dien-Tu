@@ -1,0 +1,77 @@
+{
+  "families": {
+    "F155": {
+      "children": [
+        "CH18"
+      ]
+    },
+    "F154": {
+      "children": [
+        "CH16",
+        "CH17"
+      ]
+    },
+    "F156": {
+      "children": [
+        "CH19"
+      ]
+    },
+    "F157": {
+      "children": []
+    },
+    "F169": {
+      "children": [
+        "TU01"
+      ]
+    },
+    "F176": {
+      "children": [
+        "TC01",
+        "TC02",
+        "TU02"
+      ]
+    },
+    "F173": {
+      "children": []
+    },
+    "F170": {
+      "children": [
+        "TU10",
+        "TU09",
+        "TU08",
+        "TU07"
+      ]
+    },
+    "F172": {
+      "children": []
+    },
+    "F171": {
+      "children": [
+        "TU05",
+        "TU06",
+        "TU04",
+        "TU03"
+      ]
+    }
+  },
+  "persons": {
+    "CH01": {
+      "isLiving": false
+    },
+    "CH03": {
+      "isLiving": false
+    },
+    "CH04": {
+      "isLiving": false
+    },
+    "CH02": {
+      "isLiving": false
+    },
+    "CH06": {
+      "isLiving": false
+    },
+    "P001": {
+      "isLiving": false
+    }
+  }
+}

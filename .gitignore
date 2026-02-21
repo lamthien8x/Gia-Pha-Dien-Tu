@@ -47,3 +47,4 @@ minio-data/
 # AI agent
 .gemini/
 .agents/
+.vercel

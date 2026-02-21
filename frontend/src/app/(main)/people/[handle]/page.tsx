@@ -89,7 +89,9 @@ export default function PersonProfilePage() {
                             )}
                         </h1>
                         <p className="text-muted-foreground">
-                            {genderLabel} • {person.gramps_id}
+                            {genderLabel}
+                            {person.generation ? ` • Đời thứ ${person.generation}` : ''}
+                            {person.chi ? ` • Chi ${person.chi}` : ''}
                             {person.isLiving && ' • Còn sống'}
                         </p>
                     </div>
