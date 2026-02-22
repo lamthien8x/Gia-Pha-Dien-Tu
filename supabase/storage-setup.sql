@@ -16,11 +16,7 @@ VALUES (
     'media',
     true,  -- public = true để có thể truy cập file trực tiếp qua URL
     10485760,  -- 10MB limit per file
-    ARRAY[
-        'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
-        'video/mp4', 'video/mpeg', 'video/quicktime',
-        'application/pdf'
-    ]
+    '{image/jpeg,image/jpg,image/png,image/gif,image/webp,video/mp4,video/mpeg,video/quicktime,application/pdf}'::text[]
 )
 ON CONFLICT (id) DO UPDATE SET
     public = EXCLUDED.public,
