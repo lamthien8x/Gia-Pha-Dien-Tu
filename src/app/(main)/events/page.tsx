@@ -27,7 +27,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { useAuth } from '@/components/auth-provider';
-import { supabase } from '@/lib/supabase';
+import { eventsApi } from '@/lib/api';
 
 interface EventItem {
     id: string;
@@ -76,21 +76,20 @@ function CreateEventDialog({ onCreated }: { onCreated: () => void }) {
     const handleSubmit = async () => {
         if (!title.trim() || !startAt || !user) return;
         setSubmitting(true);
-        try {
-            const { error } = await supabase.from('events').insert({
-                title: title.trim(),
-                description: description.trim() || null,
-                start_at: new Date(startAt).toISOString(),
-                location: location.trim() || null,
-                type,
-                creator_id: user.id,
-            });
-            if (!error) {
-                setOpen(false);
-                setTitle(''); setDescription(''); setStartAt(''); setLocation('');
-                onCreated();
-            }
-        } finally { setSubmitting(false); }
+        const { error } = await eventsApi.create({
+            title: title.trim(),
+            description: description.trim() || undefined,
+            start_at: new Date(startAt).toISOString(),
+            location: location.trim() || undefined,
+            type,
+            creator_id: user.id,
+        });
+        if (!error) {
+            setOpen(false);
+            setTitle(''); setDescription(''); setStartAt(''); setLocation('');
+            onCreated();
+        }
+        setSubmitting(false);
     };
 
     return (
@@ -152,14 +151,9 @@ export default function EventsPage() {
 
     const fetchEvents = useCallback(async () => {
         setLoading(true);
-        try {
-            const { data } = await supabase
-                .from('events')
-                .select('*, creator:profiles(display_name, email)')
-                .order('start_at', { ascending: false });
-            if (data) setEvents(data);
-        } catch { /* ignore */ }
-        finally { setLoading(false); }
+        const { data } = await eventsApi.list();
+        if (data) setEvents(data);
+        setLoading(false);
     }, []);
 
     useEffect(() => { fetchEvents(); }, [fetchEvents]);

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
+import { mediaApi } from '@/lib/api';
 
 interface MediaItem {
     id: string;
@@ -43,10 +44,12 @@ export default function MediaLibraryPage() {
 
     const fetchMedia = useCallback(async (state?: string) => {
         setLoading(true);
-        let query = supabase.from('media').select('*, uploader:profiles(display_name, email)').order('created_at', { ascending: false });
-        if (state && state !== 'all') query = query.eq('state', state);
-        const { data } = await query;
-        if (data) setItems(data);
+        const { data, error } = await mediaApi.list(state);
+        if (error) {
+            console.error('Fetch media error:', error);
+        } else if (data) {
+            setItems(data);
+        }
         setLoading(false);
     }, []);
 
@@ -56,62 +59,21 @@ export default function MediaLibraryPage() {
         const file = e.target.files?.[0];
         if (!file || !user) return;
         setUploading(true);
+        setError('');
 
-        try {
-            // Tạo file path: user_id/timestamp_filename
-            const fileExt = file.name.split('.').pop();
-            const fileName = `${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-            const filePath = `${user.id}/${fileName}`;
-
-            // Upload file lên Supabase Storage
-            const { error: uploadError } = await supabase.storage
-                .from('media')
-                .upload(filePath, file, {
-                    cacheControl: '3600',
-                    upsert: false,
-                });
-
-            if (uploadError) {
-                console.error('Upload error:', uploadError);
-                setError(`Lỗi upload: ${uploadError.message}`);
-                return;
-            }
-
-            // Lấy public URL
-            const { data: urlData } = supabase.storage
-                .from('media')
-                .getPublicUrl(filePath);
-
-            // Insert metadata vào media table
-            const { error: dbError } = await supabase.from('media').insert({
-                file_name: fileName,
-                mime_type: file.type,
-                file_size: file.size,
-                state: 'PENDING',
-                uploader_id: user.id,
-                title: file.name,
-            });
-
-            if (dbError) {
-                console.error('DB error:', dbError);
-                setError(`Lỗi lưu metadata: ${dbError.message}`);
-                return;
-            }
-
+        const { error } = await mediaApi.upload(file, user.id, file.name);
+        if (error) {
+            setError(error);
+        } else {
             // Refresh danh sách
             fetchMedia(tab === 'all' ? undefined : tab);
-        } catch (err) {
-            console.error('Upload error:', err);
-            setError('Upload thất bại. Vui lòng thử lại.');
-        } finally {
-            setUploading(false);
-            if (fileRef.current) fileRef.current.value = '';
         }
+        setUploading(false);
+        if (fileRef.current) fileRef.current.value = '';
     };
 
     const handleAction = async (id: string, action: 'approve' | 'reject') => {
-        const newState = action === 'approve' ? 'PUBLISHED' : 'REJECTED';
-        await supabase.from('media').update({ state: newState }).eq('id', id);
+        await mediaApi.updateState(id, action);
         fetchMedia(tab === 'all' ? undefined : tab);
     };
 

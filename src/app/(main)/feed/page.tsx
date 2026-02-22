@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/components/auth-provider';
-import { supabase } from '@/lib/supabase';
+import { postsApi } from '@/lib/api';
 
 // === Types ===
 
@@ -57,22 +57,18 @@ function PostComposer({ onPostCreated }: { onPostCreated: () => void }) {
     const handleSubmit = async () => {
         if (!body.trim() || !user) return;
         setSubmitting(true);
-        try {
-            const { error } = await supabase.from('posts').insert({
-                author_id: user.id,
-                title: title.trim() || null,
-                body: body.trim(),
-                type: 'general',
-            });
-            if (!error) {
-                setBody('');
-                setTitle('');
-                setExpanded(false);
-                onPostCreated();
-            }
-        } finally {
-            setSubmitting(false);
+        const { error } = await postsApi.create({
+            author_id: user.id,
+            title: title.trim() || undefined,
+            body: body.trim(),
+        });
+        if (!error) {
+            setBody('');
+            setTitle('');
+            setExpanded(false);
+            onPostCreated();
         }
+        setSubmitting(false);
     };
 
     if (!isLoggedIn) return null;
@@ -120,11 +116,7 @@ function CommentSection({ postId }: { postId: string }) {
 
     const fetchComments = useCallback(async () => {
         setLoading(true);
-        const { data } = await supabase
-            .from('post_comments')
-            .select('*, author:profiles(email, display_name)')
-            .eq('post_id', postId)
-            .order('created_at', { ascending: true });
+        const { data } = await postsApi.getComments(postId);
         if (data) setComments(data);
         setLoading(false);
     }, [postId]);
@@ -133,11 +125,7 @@ function CommentSection({ postId }: { postId: string }) {
 
     const handleSubmit = async () => {
         if (!newComment.trim() || !user) return;
-        const { error } = await supabase.from('post_comments').insert({
-            post_id: postId,
-            author_id: user.id,
-            body: newComment.trim(),
-        });
+        const { error } = await postsApi.addComment(postId, user.id, newComment.trim());
         if (!error) {
             setNewComment('');
             fetchComments();
@@ -189,12 +177,12 @@ function PostCard({ post, onRefresh }: { post: Post; onRefresh: () => void }) {
     const [showComments, setShowComments] = useState(false);
 
     const handleDelete = async () => {
-        const { error } = await supabase.from('posts').delete().eq('id', post.id);
+        const { error } = await postsApi.delete(post.id);
         if (!error) onRefresh();
     };
 
     const handleTogglePin = async () => {
-        const { error } = await supabase.from('posts').update({ is_pinned: !post.is_pinned }).eq('id', post.id);
+        const { error } = await postsApi.togglePin(post.id, !post.is_pinned);
         if (!error) onRefresh();
     };
 
@@ -251,32 +239,11 @@ export default function FeedPage() {
 
     const fetchPosts = useCallback(async () => {
         setLoading(true);
-        try {
-            const { data } = await supabase
-                .from('posts')
-                .select('*, author:profiles(email, display_name, role)')
-                .eq('status', 'published')
-                .order('is_pinned', { ascending: false })
-                .order('created_at', { ascending: false });
-
-            if (data) {
-                // Get comment counts
-                const postIds = data.map((p: Post) => p.id);
-                if (postIds.length > 0) {
-                    const { data: counts } = await supabase
-                        .from('post_comments')
-                        .select('post_id')
-                        .in('post_id', postIds);
-                    const countMap: Record<string, number> = {};
-                    counts?.forEach((c: { post_id: string }) => {
-                        countMap[c.post_id] = (countMap[c.post_id] || 0) + 1;
-                    });
-                    data.forEach((p: Post) => { p.comment_count = countMap[p.id] || 0; });
-                }
-                setPosts(data);
-            }
-        } catch { /* ignore */ }
-        finally { setLoading(false); }
+        const { data } = await postsApi.list();
+        if (data) {
+            setPosts(data);
+        }
+        setLoading(false);
     }, []);
 
     useEffect(() => { fetchPosts(); }, [fetchPosts]);

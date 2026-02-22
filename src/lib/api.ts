@@ -1,0 +1,171 @@
+/**
+ * API Client - Gọi backend API thay vì query Supabase trực tiếp
+ * Tất cả request đi qua Next.js API Routes (server-side)
+ */
+
+const API_BASE = '/api';
+
+interface ApiResponse<T> {
+    data?: T;
+    error?: string;
+}
+
+async function fetchApi<T>(
+    endpoint: string,
+    options?: RequestInit
+): Promise<ApiResponse<T>> {
+    try {
+        const response = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options?.headers,
+            },
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            return { error: data.error || 'Request failed' };
+        }
+
+        return { data };
+    } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        return { error: message };
+    }
+}
+
+// ==================== MEDIA API ====================
+
+export const mediaApi = {
+    // Lấy danh sách media
+    list: async (state?: string) => {
+        const query = state ? `?state=${state}` : '';
+        return fetchApi<any[]>(`/media${query}`);
+    },
+
+    // Upload file (multipart/form-data)
+    upload: async (file: File, userId: string, title?: string) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('userId', userId);
+        if (title) formData.append('title', title);
+
+        try {
+            const response = await fetch(`${API_BASE}/media/upload`, {
+                method: 'POST',
+                body: formData,
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                return { error: data.error || 'Upload failed' };
+            }
+
+            return { data: data.data };
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            return { error: message };
+        }
+    },
+
+    // Approve/Reject media
+    updateState: async (id: string, action: 'approve' | 'reject') => {
+        return fetchApi(`/media/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ action }),
+        });
+    },
+
+    // Delete media
+    delete: async (id: string) => {
+        return fetchApi(`/media/${id}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// ==================== POSTS API ====================
+
+export const postsApi = {
+    // Lấy danh sách posts
+    list: async (status = 'published') => {
+        return fetchApi<any[]>(`/posts?status=${status}`);
+    },
+
+    // Tạo post mới
+    create: async (postData: {
+        author_id: string;
+        type?: string;
+        title?: string;
+        body: string;
+        is_pinned?: boolean;
+    }) => {
+        return fetchApi('/posts', {
+            method: 'POST',
+            body: JSON.stringify(postData),
+        });
+    },
+
+    // Lấy comments của post
+    getComments: async (postId: string) => {
+        return fetchApi<any[]>(`/posts/${postId}/comments`);
+    },
+
+    // Thêm comment
+    addComment: async (postId: string, authorId: string, content: string) => {
+        return fetchApi(`/posts/${postId}/comments`, {
+            method: 'POST',
+            body: JSON.stringify({ author_id: authorId, body: content }),
+        });
+    },
+
+    // Toggle pin post
+    togglePin: async (postId: string, isPinned: boolean) => {
+        return fetchApi(`/posts/${postId}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_pinned: isPinned }),
+        });
+    },
+
+    // Delete post
+    delete: async (postId: string) => {
+        return fetchApi(`/posts/${postId}`, {
+            method: 'DELETE',
+        });
+    },
+};
+
+// ==================== EVENTS API ====================
+
+export const eventsApi = {
+    // Lấy danh sách events
+    list: async () => {
+        return fetchApi<any[]>('/events');
+    },
+
+    // Tạo event mới
+    create: async (eventData: {
+        title: string;
+        description?: string;
+        start_at: string;
+        location?: string;
+        type?: string;
+        creator_id: string;
+    }) => {
+        return fetchApi('/events', {
+            method: 'POST',
+            body: JSON.stringify(eventData),
+        });
+    },
+
+    // RSVP cho event
+    rsvp: async (eventId: string, userId: string, status: 'going' | 'maybe' | 'not_going') => {
+        return fetchApi(`/events/${eventId}/rsvp`, {
+            method: 'POST',
+            body: JSON.stringify({ user_id: userId, status }),
+        });
+    },
+};
