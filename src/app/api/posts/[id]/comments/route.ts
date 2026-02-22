@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const adminClient = createClient(supabaseUrl, supabaseServiceKey);
@@ -8,9 +10,10 @@ const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 // GET - Lấy comments của post
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    context: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
+        const params = await context.params;
         const { data, error } = await adminClient
             .from('post_comments')
             .select('*, author:profiles(email, display_name)')
@@ -29,9 +32,10 @@ export async function GET(
 // POST - Thêm comment mới
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    context: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
+        const params = await context.params;
         const body = await request.json();
         const { author_id, body: content } = body;
 

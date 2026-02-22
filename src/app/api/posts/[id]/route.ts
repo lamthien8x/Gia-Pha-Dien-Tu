@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+export const dynamic = 'force-dynamic';
+
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 const adminClient = createClient(supabaseUrl, supabaseServiceKey);
@@ -8,9 +10,10 @@ const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 // PATCH - Cập nhật post (ghim/bỏ ghim)
 export async function PATCH(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    context: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
+        const params = await context.params;
         const body = await request.json();
         const { is_pinned } = body;
 
@@ -33,9 +36,10 @@ export async function PATCH(
 // DELETE - Xóa post
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    context: { params: Promise<{ id: string }> | { id: string } }
 ) {
     try {
+        const params = await context.params;
         const { error } = await adminClient
             .from('posts')
             .delete()
