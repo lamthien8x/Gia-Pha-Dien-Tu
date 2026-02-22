@@ -3,14 +3,15 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
 // GET - Lấy danh sách events
 export async function GET(request: NextRequest) {
     try {
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('events')
             .select('*, creator:profiles(display_name, email)')
             .order('start_at', { ascending: false });
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
         // Get RSVP counts
         if (data && data.length > 0) {
             const eventIds = data.map(e => e.id);
-            const { data: rsvps } = await adminClient
+            const { data: rsvps } = await getAdminClient()
                 .from('event_rsvps')
                 .select('event_id, status')
                 .in('event_id', eventIds);
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('events')
             .insert({
                 title: title.trim(),

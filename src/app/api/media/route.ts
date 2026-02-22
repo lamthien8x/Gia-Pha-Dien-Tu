@@ -8,7 +8,7 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 // Admin client - sử dụng service role key
-const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
 // GET - Lấy danh sách media
 export async function GET(request: NextRequest) {
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const state = searchParams.get('state');
 
-        let query = adminClient
+        let query = getAdminClient()
             .from('media')
             .select('*, uploader:profiles(display_name, email)')
             .order('created_at', { ascending: false });
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('media')
             .insert({
                 file_name,

@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
 // PATCH - Cập nhật post (ghim/bỏ ghim)
 export async function PATCH(
@@ -17,7 +18,7 @@ export async function PATCH(
         const body = await request.json();
         const { is_pinned } = body;
 
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('posts')
             .update({ is_pinned })
             .eq('id', params.id)
@@ -40,7 +41,7 @@ export async function DELETE(
 ) {
     try {
         const params = await context.params;
-        const { error } = await adminClient
+        const { error } = await getAdminClient()
             .from('posts')
             .delete()
             .eq('id', params.id);

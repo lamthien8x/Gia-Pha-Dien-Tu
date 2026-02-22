@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
 const ALLOWED_TYPES = [
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
         const filePath = `${userId}/${fileName}`;
 
         // Upload file
-        const { data: uploadData, error: uploadError } = await adminClient.storage
+        const { data: uploadData, error: uploadError } = await getAdminClient().storage
             .from('media')
             .upload(filePath, file, {
                 cacheControl: '3600',
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Lưu metadata
-        const { data: mediaData, error: dbError } = await adminClient
+        const { data: mediaData, error: dbError } = await getAdminClient()
             .from('media')
             .insert({
                 file_name: fileName,
@@ -79,12 +80,12 @@ export async function POST(request: NextRequest) {
 
         if (dbError) {
             // Rollback storage upload if DB insert fails
-            await adminClient.storage.from('media').remove([filePath]);
+            await getAdminClient().storage.from('media').remove([filePath]);
             throw dbError;
         }
 
         // Get public URL
-        const { data: urlData } = adminClient.storage
+        const { data: urlData } = getAdminClient().storage
             .from('media')
             .getPublicUrl(filePath);
 

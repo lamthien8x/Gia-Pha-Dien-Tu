@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
 // GET - Lấy comments của post
 export async function GET(
@@ -14,7 +15,7 @@ export async function GET(
 ) {
     try {
         const params = await context.params;
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('post_comments')
             .select('*, author:profiles(email, display_name)')
             .eq('post_id', params.id)
@@ -53,7 +54,7 @@ export async function POST(
             );
         }
 
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('post_comments')
             .insert({
                 post_id: params.id,

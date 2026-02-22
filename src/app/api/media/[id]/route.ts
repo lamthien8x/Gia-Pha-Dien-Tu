@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
 // PATCH - Duyệt/Từ chối media
 export async function PATCH(
@@ -26,7 +27,7 @@ export async function PATCH(
 
         const newState = action === 'approve' ? 'PUBLISHED' : 'REJECTED';
 
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('media')
             .update({ state: newState })
             .eq('id', params.id)
@@ -50,7 +51,7 @@ export async function DELETE(
     try {
         const params = await context.params;
         // Lấy thông tin media trước để xóa file storage
-        const { data: media } = await adminClient
+        const { data: media } = await getAdminClient()
             .from('media')
             .select('file_name, uploader_id')
             .eq('id', params.id)
@@ -59,11 +60,11 @@ export async function DELETE(
         if (media) {
             // Xóa file khỏi storage
             const filePath = `${media.uploader_id}/${media.file_name}`;
-            await adminClient.storage.from('media').remove([filePath]);
+            await getAdminClient().storage.from('media').remove([filePath]);
         }
 
         // Xóa metadata
-        const { error } = await adminClient
+        const { error } = await getAdminClient()
             .from('media')
             .delete()
             .eq('id', params.id);

@@ -3,9 +3,10 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-const adminClient = createClient(supabaseUrl, supabaseServiceKey);
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+
+const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
 // GET - Lấy danh sách posts
 export async function GET(request: NextRequest) {
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const status = searchParams.get('status') || 'published';
 
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('posts')
             .select('*, author:profiles(email, display_name)')
             .eq('status', status)
@@ -25,7 +26,7 @@ export async function GET(request: NextRequest) {
         // Get comment counts
         if (data && data.length > 0) {
             const postIds = data.map(p => p.id);
-            const { data: counts } = await adminClient
+            const { data: counts } = await getAdminClient()
                 .from('post_comments')
                 .select('post_id')
                 .in('post_id', postIds);
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const { data, error } = await adminClient
+        const { data, error } = await getAdminClient()
             .from('posts')
             .insert({
                 author_id,
