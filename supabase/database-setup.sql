@@ -173,6 +173,98 @@ CREATE INDEX IF NOT EXISTS idx_comments_person ON comments(person_handle);
 
 
 -- ╔══════════════════════════════════════════════════════════╗
+-- ║  4b. POSTS (bài viết bảng tin)                         ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS posts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    author_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL DEFAULT 'general' CHECK (type IN ('general', 'announcement', 'news')),
+    title TEXT,
+    body TEXT NOT NULL,
+    is_pinned BOOLEAN DEFAULT false,
+    status TEXT NOT NULL DEFAULT 'published' CHECK (status IN ('draft', 'published', 'archived')),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_posts_author ON posts(author_id);
+CREATE INDEX IF NOT EXISTS idx_posts_status ON posts(status);
+CREATE INDEX IF NOT EXISTS idx_posts_created ON posts(created_at DESC);
+
+-- Post comments (khác với comments trên person)
+CREATE TABLE IF NOT EXISTS post_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+    author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    body TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_post_comments_post ON post_comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_comments_created ON post_comments(created_at);
+
+-- Updated_at trigger for posts
+CREATE TRIGGER posts_updated_at BEFORE UPDATE ON posts
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  4c. MEDIA (thư viện)                                   ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS media (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    file_name TEXT NOT NULL,
+    mime_type TEXT,
+    file_size BIGINT,
+    title TEXT,
+    description TEXT,
+    state TEXT NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING', 'PUBLISHED', 'REJECTED')),
+    uploader_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_uploader ON media(uploader_id);
+CREATE INDEX IF NOT EXISTS idx_media_state ON media(state);
+CREATE INDEX IF NOT EXISTS idx_media_created ON media(created_at DESC);
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  4d. EVENTS (sự kiện)                                    ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    description TEXT,
+    start_at TIMESTAMPTZ NOT NULL,
+    end_at TIMESTAMPTZ,
+    location TEXT,
+    type TEXT NOT NULL DEFAULT 'OTHER' CHECK (type IN ('MEMORIAL', 'MEETING', 'FESTIVAL', 'OTHER')),
+    is_recurring BOOLEAN DEFAULT false,
+    creator_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_at);
+CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
+
+-- Event RSVPs
+CREATE TABLE IF NOT EXISTS event_rsvps (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_id UUID NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'going' CHECK (status IN ('going', 'maybe', 'not_going')),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(event_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_rsvps_event ON event_rsvps(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_rsvps_user ON event_rsvps(user_id);
+
+
+-- ╔══════════════════════════════════════════════════════════╗
 -- ║  5. INVITE LINKS (mã mời đăng ký)                     ║
 -- ╚══════════════════════════════════════════════════════════╝
 
@@ -241,6 +333,70 @@ CREATE POLICY "owner or admin can delete comments" ON comments
 ALTER TABLE comments ADD CONSTRAINT comments_content_length CHECK (char_length(content) BETWEEN 1 AND 2000);
 ALTER TABLE contributions ADD CONSTRAINT contributions_value_length CHECK (char_length(new_value) <= 5000);
 
+-- Posts: public read published, authenticated insert own, owner/admin update/delete
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anyone can read published posts" ON posts FOR SELECT USING (status = 'published');
+CREATE POLICY "authenticated can insert posts" ON posts FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "owner or admin can update posts" ON posts
+    FOR UPDATE USING (
+        author_id = auth.uid() OR
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+CREATE POLICY "owner or admin can delete posts" ON posts
+    FOR DELETE USING (
+        author_id = auth.uid() OR
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+
+-- Post Comments: public read, authenticated insert own, owner/admin delete
+ALTER TABLE post_comments ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anyone can read post comments" ON post_comments FOR SELECT USING (true);
+CREATE POLICY "authenticated can insert post comments" ON post_comments FOR INSERT WITH CHECK (auth.uid() = author_id);
+CREATE POLICY "owner or admin can delete post comments" ON post_comments
+    FOR DELETE USING (
+        author_id = auth.uid() OR
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+
+-- Media: public read published, authenticated insert, admin approve/reject
+ALTER TABLE media ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anyone can read published media" ON media FOR SELECT USING (state = 'PUBLISHED');
+CREATE POLICY "authenticated can insert media" ON media FOR INSERT WITH CHECK (auth.uid() = uploader_id);
+CREATE POLICY "uploader can view own media" ON media FOR SELECT USING (auth.uid() = uploader_id);
+CREATE POLICY "admin can update media" ON media
+    FOR UPDATE USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "uploader or admin can delete media" ON media
+    FOR DELETE USING (
+        uploader_id = auth.uid() OR
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+
+-- Events: public read, authenticated insert, owner/admin update/delete
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "anyone can read events" ON events FOR SELECT USING (true);
+CREATE POLICY "authenticated can insert events" ON events FOR INSERT WITH CHECK (auth.uid() = creator_id);
+CREATE POLICY "owner or admin can update events" ON events
+    FOR UPDATE USING (
+        creator_id = auth.uid() OR
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+CREATE POLICY "owner or admin can delete events" ON events
+    FOR DELETE USING (
+        creator_id = auth.uid() OR
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+
+-- Event RSVPs: authenticated users, manage own RSVPs
+ALTER TABLE event_rsvps ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "authenticated can read rsvps" ON event_rsvps FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "authenticated can upsert rsvp" ON event_rsvps FOR INSERT
+    WITH CHECK (auth.uid() = user_id)
+    ON CONFLICT (event_id, user_id) DO UPDATE SET status = EXCLUDED.status;
+CREATE POLICY "users can update own rsvp" ON event_rsvps
+    FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "users can delete own rsvp" ON event_rsvps
+    FOR DELETE USING (auth.uid() = user_id);
+
 -- Invite Links: admin only
 ALTER TABLE invite_links ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "admin can read invite_links" ON invite_links FOR SELECT
@@ -303,6 +459,22 @@ INSERT INTO invite_links (code, role, max_uses, used_count) VALUES
 ('FAMILY2026', 'member', 100, 0),
 ('ADMIN2026', 'admin', 1, 0)
 ON CONFLICT (code) DO NOTHING;
+
+-- Posts mẫu (bài viết bảng tin)
+-- Note: Cần user_id thực tế, đây chỉ là mẫu structure
+-- INSERT INTO posts (author_id, type, title, body, is_pinned, status) VALUES
+-- ('[user-uuid]', 'announcement', 'Chào mừng gia phả họ Hồ', 'Chào mừng tất cả thành viên đến với nền tảng gia phả điện tử!', true, 'published'),
+-- ('[user-uuid]', 'general', 'Giỗ tổ Nguyễn Văn An', 'Ngày 15/11 này là ngày giỗ của tổ tiên Nguyễn Văn An. Mời mọi người về dự.', false, 'published');
+
+-- Events mẫu (sự kiện)
+-- Note: Cần user_id thực tế
+-- INSERT INTO events (title, description, start_at, location, type, creator_id) VALUES
+-- ('Giỗ tổ Nguyễn Văn An', 'Kính tiễn tổ tiên Nguyễn Văn An, người có công xây dựng dòng họ.', '2026-11-15T08:00:00+07:00', 'Nhà thờ họ Hồ, Hà Nam', 'MEMORIAL', '[user-uuid]'),
+-- ('Họp họ định kỳ', 'Họp họ định kỳ cuối năm để thảo luận các công việc dòng họ.', '2026-12-28T14:00:00+07:00', 'Nhà văn hóa xã, Hà Nam', 'MEETING', '[user-uuid]');
+
+-- Media mẫu (thư viện - placeholder, cần storage bucket cho file thật)
+-- INSERT INTO media (file_name, mime_type, file_size, title, description, state, uploader_id) VALUES
+-- ('anh-tap-the.jpg', 'image/jpeg', 524288, 'Ảnh tập thể', 'Ảnh tập thể họ Hồ năm 2025', 'PUBLISHED', '[user-uuid]');
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  8. HELPER — Nâng quyền Admin                           ║

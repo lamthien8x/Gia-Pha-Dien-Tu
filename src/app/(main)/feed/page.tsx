@@ -121,7 +121,7 @@ function CommentSection({ postId }: { postId: string }) {
     const fetchComments = useCallback(async () => {
         setLoading(true);
         const { data } = await supabase
-            .from('comments')
+            .from('post_comments')
             .select('*, author:profiles(email, display_name)')
             .eq('post_id', postId)
             .order('created_at', { ascending: true });
@@ -133,7 +133,7 @@ function CommentSection({ postId }: { postId: string }) {
 
     const handleSubmit = async () => {
         if (!newComment.trim() || !user) return;
-        const { error } = await supabase.from('comments').insert({
+        const { error } = await supabase.from('post_comments').insert({
             post_id: postId,
             author_id: user.id,
             body: newComment.trim(),
@@ -264,7 +264,7 @@ export default function FeedPage() {
                 const postIds = data.map((p: Post) => p.id);
                 if (postIds.length > 0) {
                     const { data: counts } = await supabase
-                        .from('comments')
+                        .from('post_comments')
                         .select('post_id')
                         .in('post_id', postIds);
                     const countMap: Record<string, number> = {};
