@@ -117,10 +117,11 @@ export function Sidebar() {
             {!collapsed && (
                 <div className="border-t px-4 py-3">
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                        Setup cho dòng họ, liên hệ:<br />
-                        <span className="font-semibold text-foreground">Đức Anh</span> — 088 999 1120
+                        Để thiết lập <span className="font-semibold text-foreground">gia phả điện tử</span> riêng cho dòng họ, truy cập được từ bất kì đâu, vui lòng liên hệ
                         <br />
-                        <span className="text-[10px] opacity-60">(Phone Only)</span>
+                        <span className="font-semibold text-foreground">📞 088 999 1120</span>
+                        <br />
+                        <span className="text-[10px] opacity-70">để nhận báo giá.</span>
                     </p>
                 </div>
             )}
