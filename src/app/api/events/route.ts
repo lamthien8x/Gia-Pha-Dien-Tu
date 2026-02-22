@@ -17,12 +17,12 @@ export async function GET(request: NextRequest) {
             .order('start_at', { ascending: false });
 
         if (error) throw error;
-        
+
         if (data && data.length > 0) {
             const userIds = [...new Set(data.map(item => item.creator_id).filter(Boolean))];
             if (userIds.length > 0) {
                 const { data: profiles } = await getAdminClient().from('profiles').select('id, display_name, email').in('id', userIds);
-                const profileMap = {};
+                const profileMap: Record<string, any> = {};
                 if (profiles) {
                     profiles.forEach(p => profileMap[p.id] = { display_name: p.display_name, email: p.email });
                 }
