@@ -1379,13 +1379,6 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         families: [], parentFamilies: ['F092']
     },
     {
-        handle: 'L129', gramps_id: 'I0188', gender: 1,
-        displayName: 'Lê Huy Lâm', surname: 'Lê', firstName: 'Huy Lâm',
-        generation: 14, chi: 1,
-        isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F092']
-    },
-    {
         handle: 'L130', gramps_id: 'I0189', gender: 1,
         displayName: 'Lê Huy Sơn', surname: 'Lê', firstName: 'Huy Sơn',
         generation: 14, chi: 1,
