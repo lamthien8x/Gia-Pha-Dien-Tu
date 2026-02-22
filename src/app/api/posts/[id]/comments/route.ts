@@ -17,11 +17,27 @@ export async function GET(
         const params = await context.params;
         const { data, error } = await getAdminClient()
             .from('post_comments')
-            .select('*, author:profiles(email, display_name)')
+            .select('*')
             .eq('post_id', params.id)
             .order('created_at', { ascending: true });
 
         if (error) throw error;
+        
+        if (data && data.length > 0) {
+            const userIds = [...new Set(data.map(item => item.author_id).filter(Boolean))];
+            if (userIds.length > 0) {
+                const { data: profiles } = await getAdminClient().from('profiles').select('id, display_name, email').in('id', userIds);
+                const profileMap = {};
+                if (profiles) {
+                    profiles.forEach(p => profileMap[p.id] = { display_name: p.display_name, email: p.email });
+                }
+                data.forEach(item => {
+                    if (item.author_id && profileMap[item.author_id]) {
+                        item.author = profileMap[item.author_id];
+                    }
+                });
+            }
+        }
 
         return NextResponse.json({ data });
     } catch (error: unknown) {
@@ -61,7 +77,7 @@ export async function POST(
                 author_id,
                 body: content,
             })
-            .select('*, author:profiles(email, display_name)')
+            .select('*')
             .single();
 
         if (error) throw error;

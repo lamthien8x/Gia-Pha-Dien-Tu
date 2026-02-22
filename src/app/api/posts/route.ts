@@ -16,12 +16,28 @@ export async function GET(request: NextRequest) {
 
         const { data, error } = await getAdminClient()
             .from('posts')
-            .select('*, author:profiles(email, display_name)')
+            .select('*')
             .eq('status', status)
             .order('is_pinned', { ascending: false })
             .order('created_at', { ascending: false });
 
         if (error) throw error;
+        
+        if (data && data.length > 0) {
+            const userIds = [...new Set(data.map(item => item.author_id).filter(Boolean))];
+            if (userIds.length > 0) {
+                const { data: profiles } = await getAdminClient().from('profiles').select('id, display_name, email').in('id', userIds);
+                const profileMap = {};
+                if (profiles) {
+                    profiles.forEach(p => profileMap[p.id] = { display_name: p.display_name, email: p.email });
+                }
+                data.forEach(item => {
+                    if (item.author_id && profileMap[item.author_id]) {
+                        item.author = profileMap[item.author_id];
+                    }
+                });
+            }
+        }
 
         // Get comment counts
         if (data && data.length > 0) {

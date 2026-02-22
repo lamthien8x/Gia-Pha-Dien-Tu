@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
         let query = getAdminClient()
             .from('media')
-            .select('*, uploader:profiles(display_name, email)')
+            .select('*')
             .order('created_at', { ascending: false });
 
         if (state && state !== 'all') {
@@ -28,9 +28,27 @@ export async function GET(request: NextRequest) {
         const { data, error } = await query;
 
         if (error) throw error;
+        
+        // Fetch profiles manually
+        if (data && data.length > 0) {
+            const userIds = [...new Set(data.map(item => item.uploader_id).filter(Boolean))];
+            if (userIds.length > 0) {
+                const { data: profiles } = await getAdminClient().from('profiles').select('id, display_name, email').in('id', userIds);
+                const profileMap = {};
+                if (profiles) {
+                    profiles.forEach(p => profileMap[p.id] = { display_name: p.display_name, email: p.email });
+                }
+                data.forEach(item => {
+                    if (item.uploader_id && profileMap[item.uploader_id]) {
+                        item.uploader = profileMap[item.uploader_id];
+                    }
+                });
+            }
+        }
 
         return NextResponse.json({ data });
     } catch (error: unknown) {
+        console.error('API Error:', error);
         const message = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json({ error: message }, { status: 500 });
     }
@@ -75,6 +93,7 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({ data });
     } catch (error: unknown) {
+        console.error('API Error:', error);
         const message = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json({ error: message }, { status: 500 });
     }

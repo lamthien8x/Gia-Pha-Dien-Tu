@@ -13,10 +13,26 @@ export async function GET(request: NextRequest) {
     try {
         const { data, error } = await getAdminClient()
             .from('events')
-            .select('*, creator:profiles(display_name, email)')
+            .select('*')
             .order('start_at', { ascending: false });
 
         if (error) throw error;
+        
+        if (data && data.length > 0) {
+            const userIds = [...new Set(data.map(item => item.creator_id).filter(Boolean))];
+            if (userIds.length > 0) {
+                const { data: profiles } = await getAdminClient().from('profiles').select('id, display_name, email').in('id', userIds);
+                const profileMap = {};
+                if (profiles) {
+                    profiles.forEach(p => profileMap[p.id] = { display_name: p.display_name, email: p.email });
+                }
+                data.forEach(item => {
+                    if (item.creator_id && profileMap[item.creator_id]) {
+                        item.creator = profileMap[item.creator_id];
+                    }
+                });
+            }
+        }
 
         // Get RSVP counts
         if (data && data.length > 0) {
