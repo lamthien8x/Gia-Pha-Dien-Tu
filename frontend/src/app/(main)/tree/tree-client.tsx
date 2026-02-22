@@ -133,7 +133,7 @@ function computeTreeStats(nodes: PositionedNode[], families: TreeFamily[]): Tree
 }
 
 // Default depth at which branches auto-collapse in panoramic view (0-indexed: gen 3 = Đời 4)
-const AUTO_COLLAPSE_GEN = 3;
+const AUTO_COLLAPSE_GEN = 8;
 
 // Compute generations via BFS from root persons (persons not in any family as children)
 function computePersonGenerations(people: TreeNode[], families: TreeFamily[]): Map<string, number> {
@@ -587,7 +587,7 @@ export default function TreeViewPage() {
         const pad = 40;
         const tw = layout.width + pad * 2;
         const th = layout.height + pad * 2;
-        const scale = Math.min(vw / tw, vh / th, 1.2);
+        const scale = Math.max(Math.min(vw / tw, vh / th, 1.2), 0.12);
         setTransform({
             x: (vw - layout.width * scale) / 2,
             y: (vh - layout.height * scale) / 2,
