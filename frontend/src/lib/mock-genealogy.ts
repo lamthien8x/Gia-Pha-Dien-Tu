@@ -774,14 +774,14 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         displayName: 'Lê Huy Thụ', surname: 'Lê', firstName: 'Huy Thụ',
         generation: 13, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F054']
+        families: ['F056a'], parentFamilies: ['F054']
     },
     {
         handle: 'T108', gramps_id: 'I0100', gender: 1,
         displayName: 'Lê Huy Phú', surname: 'Lê', firstName: 'Huy Phú',
         generation: 13, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F054']
+        families: ['F056b'], parentFamilies: ['F054']
     },
     {
         handle: 'T109', gramps_id: 'I0101', gender: 1,
@@ -816,14 +816,14 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         displayName: 'Lê Huy Bảng', surname: 'Lê', firstName: 'Huy Bảng',
         generation: 14, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: ['F059'], parentFamilies: ['F056']
+        families: ['F059'], parentFamilies: ['F056a']
     },
     {
         handle: 'T114', gramps_id: 'I0106', gender: 1,
         displayName: 'Lê Huy Tuấn', surname: 'Lê', firstName: 'Huy Tuấn',
         generation: 14, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F056']
+        families: ['F059a'], parentFamilies: ['F056b']
     },
     {
         handle: 'T115', gramps_id: 'I0107', gender: 1,
@@ -835,16 +835,16 @@ export const MOCK_PEOPLE: PersonDetail[] = [
     {
         handle: 'T116', gramps_id: 'I0108', gender: 1,
         displayName: 'Lê Huy Viện', surname: 'Lê', firstName: 'Huy Viện',
-        generation: 14, chi: 1,
+        generation: 13, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F058']
+        families: ['F058a'], parentFamilies: ['F055']
     },
     {
         handle: 'T117', gramps_id: 'I0109', gender: 1,
-        displayName: 'Lê Huy Thế', surname: 'Lê', firstName: 'Huy Thế',
+        displayName: 'Lê Huy Viên', surname: 'Lê', firstName: 'Huy Viên',
         generation: 14, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F058']
+        families: [], parentFamilies: ['F058a']
     },
     {
         handle: 'T118', gramps_id: 'I0110', gender: 1,
@@ -858,7 +858,7 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         displayName: 'Lê Huy Nam', surname: 'Lê', firstName: 'Huy Nam',
         generation: 14, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F058']
+        families: [], parentFamilies: []
     },
     {
         handle: 'T120', gramps_id: 'I0112', gender: 1,
@@ -872,7 +872,7 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         displayName: 'Lê Huy Anh', surname: 'Lê', firstName: 'Huy Anh',
         generation: 15, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F059']
+        families: [], parentFamilies: ['F059a']
     },
     {
         handle: 'T122', gramps_id: 'I0114', gender: 1,
@@ -921,21 +921,21 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         displayName: 'Lê Huy Thế', surname: 'Lê', firstName: 'Huy Thế',
         generation: 13, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F063']
+        families: ['F064a'], parentFamilies: ['F063']
     },
     {
         handle: 'V107', gramps_id: 'I0121', gender: 1,
         displayName: 'Lê Huy Tùng', surname: 'Lê', firstName: 'Huy Tùng',
         generation: 14, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F064']
+        families: [], parentFamilies: ['F064a']
     },
     {
         handle: 'V108', gramps_id: 'I0122', gender: 1,
         displayName: 'Lê Huy Văn', surname: 'Lê', firstName: 'Huy Văn',
         generation: 14, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F064']
+        families: [], parentFamilies: ['F058']
     },
     {
         handle: 'D101', gramps_id: 'I0123', gender: 1,
@@ -2803,11 +2803,11 @@ export const MOCK_FAMILIES: TreeFamily[] = [
     },
     {
         handle: 'F055', fatherHandle: 'T105',
-        children: ['T109', 'T110', 'T111', 'T112']
+        children: ['T109', 'T116', 'T110', 'T111', 'T112']
     },
     {
         handle: 'F056', fatherHandle: 'T106',
-        children: ['T113', 'T114']
+        children: []
     },
     {
         handle: 'F057', fatherHandle: 'T109',
@@ -2815,11 +2815,11 @@ export const MOCK_FAMILIES: TreeFamily[] = [
     },
     {
         handle: 'F058', fatherHandle: 'T112',
-        children: ['T116', 'T117', 'T118', 'T119']
+        children: ['T118', 'V108']
     },
     {
         handle: 'F059', fatherHandle: 'T113',
-        children: ['T120', 'T121']
+        children: ['T120']
     },
     {
         handle: 'F060', fatherHandle: 'T115',
@@ -2839,7 +2839,27 @@ export const MOCK_FAMILIES: TreeFamily[] = [
     },
     {
         handle: 'F064', fatherHandle: 'V105',
-        children: ['V107', 'V108']
+        children: []
+    },
+    {
+        handle: 'F056a', fatherHandle: 'T107',
+        children: ['T113']
+    },
+    {
+        handle: 'F056b', fatherHandle: 'T108',
+        children: ['T114']
+    },
+    {
+        handle: 'F058a', fatherHandle: 'T116',
+        children: ['T117']
+    },
+    {
+        handle: 'F059a', fatherHandle: 'T114',
+        children: ['T121']
+    },
+    {
+        handle: 'F064a', fatherHandle: 'V106',
+        children: ['V107']
     },
     {
         handle: 'F065', fatherHandle: 'P041',
