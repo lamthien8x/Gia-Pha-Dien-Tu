@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import { Shield, Plus, MoreHorizontal, Copy, Check, Link2, Trash2 } from 'lucide-react';
+import { useState, useCallback, useEffect } from 'react';
+import { Shield, Plus, MoreHorizontal, Copy, Check, Link2, Trash2, RefreshCw, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
@@ -25,27 +25,37 @@ import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
+import { useAuth } from '@/components/auth-provider';
+import { supabase } from '@/lib/supabase';
 
 const ROLE_COLORS: Record<string, string> = {
-    ADMIN: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-    EDITOR: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-    ARCHIVIST: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-    MEMBER: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-    GUEST: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+    admin: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+    editor: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+    archivist: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+    member: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+    guest: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 };
+
+interface ProfileUser {
+    id: string;
+    email: string;
+    display_name: string | null;
+    role: string;
+    status: string;
+    created_at: string;
+}
 
 interface InviteLink {
     id: string;
     code: string;
     role: string;
-    maxUses: number;
-    usedCount: number;
-    url: string;
-    createdAt: string;
+    max_uses: number;
+    used_count: number;
+    created_at: string;
 }
 
 function generateCode() {
@@ -56,60 +66,139 @@ function generateCode() {
 }
 
 export default function AdminUsersPage() {
-    const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
-    const [inviteRole, setInviteRole] = useState('MEMBER');
-    const [inviteMaxUses, setInviteMaxUses] = useState(1);
-    const [generatedLink, setGeneratedLink] = useState<InviteLink | null>(null);
-    const [copied, setCopied] = useState(false);
+    const { isAdmin, loading: authLoading } = useAuth();
+    const [users, setUsers] = useState<ProfileUser[]>([]);
     const [invites, setInvites] = useState<InviteLink[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const users = [
-        { id: '1', displayName: 'Lehuy', email: 'admin@clanhub.vn', role: 'ADMIN', status: 'ACTIVE', createdAt: '2026-02-19' },
-    ];
+    const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+    const [inviteRole, setInviteRole] = useState('member');
+    const [inviteMaxUses, setInviteMaxUses] = useState(1);
+    const [copied, setCopied] = useState<string | null>(null);
 
-    const handleCreateInvite = useCallback(() => {
+    // Fetch users from profiles table
+    const fetchUsers = useCallback(async () => {
+        setLoading(true);
+        try {
+            const { data, error } = await supabase
+                .from('profiles')
+                .select('*')
+                .order('created_at', { ascending: true });
+            if (!error && data) setUsers(data);
+        } catch { /* ignore */ }
+        finally { setLoading(false); }
+    }, []);
+
+    // Fetch invite links
+    const fetchInvites = useCallback(async () => {
+        try {
+            const { data, error } = await supabase
+                .from('invite_links')
+                .select('*')
+                .order('created_at', { ascending: false });
+            if (!error && data) setInvites(data);
+        } catch { /* ignore */ }
+    }, []);
+
+    useEffect(() => {
+        if (!authLoading && isAdmin) {
+            fetchUsers();
+            fetchInvites();
+        }
+    }, [authLoading, isAdmin, fetchUsers, fetchInvites]);
+
+    // Create invite link
+    const handleCreateInvite = useCallback(async () => {
         const code = generateCode();
-        const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000';
-        const newInvite: InviteLink = {
-            id: `inv_${Date.now()}`,
-            code,
-            role: inviteRole,
-            maxUses: inviteMaxUses,
-            usedCount: 0,
-            url: `${baseUrl}/register?code=${code}`,
-            createdAt: new Date().toISOString().split('T')[0],
-        };
-        setGeneratedLink(newInvite);
-        setInvites(prev => [newInvite, ...prev]);
+        const { data, error } = await supabase
+            .from('invite_links')
+            .insert({
+                code,
+                role: inviteRole,
+                max_uses: inviteMaxUses,
+            })
+            .select()
+            .single();
+        if (!error && data) {
+            setInvites(prev => [data, ...prev]);
+        }
     }, [inviteRole, inviteMaxUses]);
 
-    const handleCopy = useCallback(async (url: string) => {
+    // Delete invite link
+    const handleDeleteInvite = useCallback(async (id: string) => {
+        const { error } = await supabase
+            .from('invite_links')
+            .delete()
+            .eq('id', id);
+        if (!error) setInvites(prev => prev.filter(inv => inv.id !== id));
+    }, []);
+
+    // Change user role
+    const handleChangeRole = useCallback(async (userId: string, newRole: string) => {
+        const { error } = await supabase
+            .from('profiles')
+            .update({ role: newRole })
+            .eq('id', userId);
+        if (!error) {
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+        }
+    }, []);
+
+    // Suspend / reactivate user
+    const handleToggleStatus = useCallback(async (userId: string, currentStatus: string) => {
+        const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+        const { error } = await supabase
+            .from('profiles')
+            .update({ status: newStatus })
+            .eq('id', userId);
+        if (!error) {
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+        }
+    }, []);
+
+    // Copy to clipboard
+    const handleCopy = useCallback(async (text: string) => {
         try {
-            await navigator.clipboard.writeText(url);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+            await navigator.clipboard.writeText(text);
+            setCopied(text);
+            setTimeout(() => setCopied(null), 2000);
         } catch {
-            // Fallback
             const input = document.createElement('input');
-            input.value = url;
+            input.value = text;
             document.body.appendChild(input);
             input.select();
             document.execCommand('copy');
             document.body.removeChild(input);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+            setCopied(text);
+            setTimeout(() => setCopied(null), 2000);
         }
     }, []);
 
-    const handleDeleteInvite = useCallback((id: string) => {
-        setInvites(prev => prev.filter(inv => inv.id !== id));
-    }, []);
+    const getInviteUrl = (code: string) => {
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+        return `${baseUrl}/register?code=${code}`;
+    };
 
     const handleCloseDialog = () => {
         setInviteDialogOpen(false);
-        setGeneratedLink(null);
-        setCopied(false);
+        setCopied(null);
     };
+
+    if (authLoading) {
+        return (
+            <div className="flex items-center justify-center h-48">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+        );
+    }
+
+    if (!isAdmin) {
+        return (
+            <div className="flex items-center justify-center h-48">
+                <p className="text-muted-foreground">Bạn không có quyền truy cập trang này.</p>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-6">
@@ -121,21 +210,22 @@ export default function AdminUsersPage() {
                     </h1>
                     <p className="text-muted-foreground">Quản lý tài khoản và quyền truy cập</p>
                 </div>
-
-                <Dialog open={inviteDialogOpen} onOpenChange={(open) => { if (!open) handleCloseDialog(); else setInviteDialogOpen(true); }}>
-                    <DialogTrigger asChild>
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Tạo link mời
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                        <DialogHeader>
-                            <DialogTitle>Tạo link mời thành viên</DialogTitle>
-                            <DialogDescription>Chọn quyền và tạo link mời cho thành viên mới</DialogDescription>
-                        </DialogHeader>
-
-                        {!generatedLink ? (
+                <div className="flex gap-2">
+                    <Button variant="outline" size="icon" onClick={() => { fetchUsers(); fetchInvites(); }}>
+                        <RefreshCw className="h-4 w-4" />
+                    </Button>
+                    <Dialog open={inviteDialogOpen} onOpenChange={(open) => { if (!open) handleCloseDialog(); else setInviteDialogOpen(true); }}>
+                        <DialogTrigger asChild>
+                            <Button>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Tạo link mời
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent>
+                            <DialogHeader>
+                                <DialogTitle>Tạo link mời thành viên</DialogTitle>
+                                <DialogDescription>Chọn quyền và tạo link mời cho thành viên mới</DialogDescription>
+                            </DialogHeader>
                             <div className="space-y-4 mt-4">
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">Quyền</label>
@@ -144,9 +234,9 @@ export default function AdminUsersPage() {
                                         value={inviteRole}
                                         onChange={e => setInviteRole(e.target.value)}
                                     >
-                                        <option value="MEMBER">Member — Xem và đề xuất chỉnh sửa</option>
-                                        <option value="EDITOR">Editor — Chỉnh sửa trực tiếp</option>
-                                        <option value="ARCHIVIST">Archivist — Quản lý tư liệu</option>
+                                        <option value="member">Member — Xem và đề xuất chỉnh sửa</option>
+                                        <option value="editor">Editor — Chỉnh sửa trực tiếp</option>
+                                        <option value="archivist">Archivist — Quản lý tư liệu</option>
                                     </select>
                                 </div>
                                 <div className="space-y-2">
@@ -164,112 +254,98 @@ export default function AdminUsersPage() {
                                     Tạo link mời
                                 </Button>
                             </div>
-                        ) : (
-                            <div className="space-y-4 mt-4">
-                                <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
-                                    <div className="flex items-center gap-2">
-                                        <Check className="h-5 w-5 text-green-600" />
-                                        <span className="font-medium text-green-700">Link đã tạo thành công!</span>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Input
-                                            readOnly
-                                            value={generatedLink.url}
-                                            className="text-xs font-mono bg-background"
-                                        />
-                                        <Button
-                                            size="icon"
-                                            variant="outline"
-                                            onClick={() => handleCopy(generatedLink.url)}
-                                            className="shrink-0"
-                                        >
-                                            {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-                                        </Button>
-                                    </div>
-                                    <div className="flex gap-4 text-xs text-muted-foreground">
-                                        <span>Quyền: <Badge variant="secondary" className={`${ROLE_COLORS[generatedLink.role]} text-xs`}>{generatedLink.role}</Badge></span>
-                                        <span>Dùng tối đa: {generatedLink.maxUses} lần</span>
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button variant="outline" className="flex-1" onClick={handleCloseDialog}>
-                                        Đóng
-                                    </Button>
-                                    <Button className="flex-1" onClick={() => setGeneratedLink(null)}>
-                                        <Plus className="mr-2 h-4 w-4" />
-                                        Tạo thêm
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-                    </DialogContent>
-                </Dialog>
+                        </DialogContent>
+                    </Dialog>
+                </div>
             </div>
 
             {/* Users Table */}
             <Card>
                 <CardHeader>
                     <CardTitle>Danh sách thành viên</CardTitle>
+                    <CardDescription>{users.length} thành viên</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>Tên</TableHead>
-                                <TableHead>Email</TableHead>
-                                <TableHead>Quyền</TableHead>
-                                <TableHead>Trạng thái</TableHead>
-                                <TableHead>Ngày tham gia</TableHead>
-                                <TableHead className="w-12"></TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {users.map((user) => (
-                                <TableRow key={user.id}>
-                                    <TableCell className="font-medium">{user.displayName}</TableCell>
-                                    <TableCell>{user.email}</TableCell>
-                                    <TableCell>
-                                        <Badge variant="secondary" className={ROLE_COLORS[user.role]}>
-                                            {user.role}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>
-                                        <Badge variant={user.status === 'ACTIVE' ? 'default' : 'destructive'}>
-                                            {user.status === 'ACTIVE' ? 'Hoạt động' : 'Tạm ngưng'}
-                                        </Badge>
-                                    </TableCell>
-                                    <TableCell>{user.createdAt}</TableCell>
-                                    <TableCell>
-                                        <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
-                                                </Button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuItem>Đổi quyền</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive">Tạm ngưng</DropdownMenuItem>
-                                            </DropdownMenuContent>
-                                        </DropdownMenu>
-                                    </TableCell>
+                    {loading ? (
+                        <div className="flex items-center justify-center h-32">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : (
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Tên</TableHead>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Quyền</TableHead>
+                                    <TableHead>Trạng thái</TableHead>
+                                    <TableHead>Ngày tham gia</TableHead>
+                                    <TableHead className="w-12"></TableHead>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                            </TableHeader>
+                            <TableBody>
+                                {users.map((user) => (
+                                    <TableRow key={user.id}>
+                                        <TableCell className="font-medium">{user.display_name || user.email.split('@')[0]}</TableCell>
+                                        <TableCell>{user.email}</TableCell>
+                                        <TableCell>
+                                            <Badge variant="secondary" className={ROLE_COLORS[user.role] || ''}>
+                                                {user.role.toUpperCase()}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>
+                                            <Badge variant={user.status === 'active' ? 'default' : 'destructive'}>
+                                                {user.status === 'active' ? 'Hoạt động' : 'Tạm ngưng'}
+                                            </Badge>
+                                        </TableCell>
+                                        <TableCell>{new Date(user.created_at).toLocaleDateString('vi-VN')}</TableCell>
+                                        <TableCell>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button variant="ghost" size="icon">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'admin')}>
+                                                        Đặt Admin
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'editor')}>
+                                                        Đặt Editor
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'member')}>
+                                                        Đặt Member
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        className={user.status === 'active' ? 'text-destructive' : 'text-green-600'}
+                                                        onClick={() => handleToggleStatus(user.id, user.status)}
+                                                    >
+                                                        {user.status === 'active' ? 'Tạm ngưng' : 'Kích hoạt lại'}
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
+                    )}
                 </CardContent>
             </Card>
 
             {/* Invite Links Section */}
-            {invites.length > 0 && (
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="text-base flex items-center gap-2">
-                            <Link2 className="h-4 w-4" />
-                            Link mời đã tạo
-                        </CardTitle>
-                        <CardDescription>{invites.length} link</CardDescription>
-                    </CardHeader>
-                    <CardContent>
+            <Card>
+                <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                        <Link2 className="h-4 w-4" />
+                        Link mời
+                    </CardTitle>
+                    <CardDescription>{invites.length} link</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {invites.length === 0 ? (
+                        <p className="text-center text-muted-foreground py-6">Chưa có link mời nào</p>
+                    ) : (
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -289,21 +365,23 @@ export default function AdminUsersPage() {
                                             </code>
                                         </TableCell>
                                         <TableCell>
-                                            <Badge variant="secondary" className={ROLE_COLORS[inv.role]}>
-                                                {inv.role}
+                                            <Badge variant="secondary" className={ROLE_COLORS[inv.role] || ''}>
+                                                {inv.role.toUpperCase()}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell>{inv.usedCount} / {inv.maxUses}</TableCell>
-                                        <TableCell className="text-sm text-muted-foreground">{inv.createdAt}</TableCell>
+                                        <TableCell>{inv.used_count} / {inv.max_uses}</TableCell>
+                                        <TableCell className="text-sm text-muted-foreground">
+                                            {new Date(inv.created_at).toLocaleDateString('vi-VN')}
+                                        </TableCell>
                                         <TableCell>
                                             <div className="flex gap-1">
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
-                                                    onClick={() => handleCopy(inv.url)}
+                                                    onClick={() => handleCopy(getInviteUrl(inv.code))}
                                                     title="Sao chép link"
                                                 >
-                                                    <Copy className="h-4 w-4" />
+                                                    {copied === getInviteUrl(inv.code) ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
                                                 </Button>
                                                 <Button
                                                     variant="ghost"
@@ -320,9 +398,9 @@ export default function AdminUsersPage() {
                                 ))}
                             </TableBody>
                         </Table>
-                    </CardContent>
-                </Card>
-            )}
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 }
