@@ -124,3 +124,16 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Touch action for tree pan/zoom */
+.tree-viewport {
+  touch-action: none;
+  /* GPU acceleration for smooth rendering */
+  will-change: transform;
+}
+
+.tree-viewport > div {
+  /* Force GPU layer for the transformed content */
+  contain: layout style paint;
+  transform: translateZ(0);
+}

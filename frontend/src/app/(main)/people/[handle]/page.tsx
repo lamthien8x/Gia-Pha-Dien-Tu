@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, User, Heart, Image, FileText, History, Lock, Phone, MapPin, Briefcase, GraduationCap, Tag, MessageCircle } from 'lucide-react';
+import {
+    ArrowLeft, User, Heart, Image, FileText, History, Lock,
+    Phone, MapPin, Briefcase, GraduationCap, Tag, MessageCircle,
+    Pencil, Check, X, Save, Loader2
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -12,19 +17,115 @@ import { Separator } from '@/components/ui/separator';
 import { zodiacYear } from '@/lib/genealogy-types';
 import type { PersonDetail } from '@/lib/genealogy-types';
 import { CommentSection } from '@/components/comment-section';
+import { useAuth } from '@/components/auth-provider';
+import { supabase } from '@/lib/supabase';
 
+// ─── Inline edit field component ────────────────────────────
+function EditableField({
+    label, value, fieldKey, personHandle, type = 'text',
+    onSaved,
+}: {
+    label: string;
+    value: string | number | undefined | null;
+    fieldKey: string;
+    personHandle: string;
+    type?: 'text' | 'number' | 'textarea';
+    onSaved: (key: string, val: string) => void;
+}) {
+    const [editing, setEditing] = useState(false);
+    const [draft, setDraft] = useState(String(value ?? ''));
+    const [saving, setSaving] = useState(false);
 
+    const handleSave = async () => {
+        setSaving(true);
+        const { error } = await supabase
+            .from('people')
+            .update({ [fieldKey]: draft || null })
+            .eq('handle', personHandle);
+        setSaving(false);
+        if (!error) {
+            onSaved(fieldKey, draft);
+            setEditing(false);
+        }
+    };
+
+    const handleCancel = () => { setDraft(String(value ?? '')); setEditing(false); };
+
+    if (!editing) {
+        return (
+            <div className="group flex items-start justify-between gap-2">
+                <div>
+                    <p className="text-xs font-medium text-muted-foreground">{label}</p>
+                    <p className="text-sm">{value ?? <span className="text-muted-foreground italic">—</span>}</p>
+                </div>
+                <button
+                    onClick={() => { setDraft(String(value ?? '')); setEditing(true); }}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground shrink-0 mt-0.5"
+                    title="Chỉnh sửa"
+                >
+                    <Pencil className="h-3.5 w-3.5" />
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            {type === 'textarea' ? (
+                <textarea
+                    value={draft}
+                    onChange={e => setDraft(e.target.value)}
+                    autoFocus
+                    rows={3}
+                    className="w-full border rounded-lg px-3 py-1.5 text-sm bg-background resize-y"
+                />
+            ) : (
+                <Input
+                    type={type}
+                    value={draft}
+                    onChange={e => setDraft(e.target.value)}
+                    autoFocus
+                    className="h-8 text-sm"
+                    onKeyDown={e => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') handleCancel(); }}
+                />
+            )}
+            <div className="flex gap-1">
+                <Button size="sm" className="h-7 px-2" onClick={handleSave} disabled={saving}>
+                    {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                </Button>
+                <Button size="sm" variant="ghost" className="h-7 px-2" onClick={handleCancel}>
+                    <X className="h-3.5 w-3.5" />
+                </Button>
+            </div>
+        </div>
+    );
+}
+
+// ─── Static InfoRow (for non-admin view) ────────────────────
+function InfoRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div>
+            <p className="text-xs font-medium text-muted-foreground">{label}</p>
+            <p className="text-sm">{value}</p>
+        </div>
+    );
+}
+
+// ─── Main Page ───────────────────────────────────────────────
 export default function PersonProfilePage() {
     const params = useParams();
     const router = useRouter();
     const handle = params.handle as string;
+    const { isAdmin } = useAuth();
+
     const [person, setPerson] = useState<PersonDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [saveMsg, setSaveMsg] = useState('');
 
     useEffect(() => {
         const fetchPerson = async () => {
             try {
-                const { supabase } = await import('@/lib/supabase');
                 const { data, error } = await supabase
                     .from('people')
                     .select('*')
@@ -51,6 +152,17 @@ export default function PersonProfilePage() {
                         occupation: row.occupation as string | undefined,
                         education: row.education as string | undefined,
                         notes: row.notes as string | undefined,
+                        surname: row.surname as string | undefined,
+                        firstName: row.first_name as string | undefined,
+                        birthDate: row.birth_date as string | undefined,
+                        birthPlace: row.birth_place as string | undefined,
+                        deathDate: row.death_date as string | undefined,
+                        deathPlace: row.death_place as string | undefined,
+                        zalo: row.zalo as string | undefined,
+                        facebook: row.facebook as string | undefined,
+                        company: row.company as string | undefined,
+                        nickName: row.nick_name as string | undefined,
+                        biography: row.biography as string | undefined,
                     } as PersonDetail);
                 }
             } catch { /* ignore */ }
@@ -59,27 +171,52 @@ export default function PersonProfilePage() {
         fetchPerson();
     }, [handle]);
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-96">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-            </div>
-        );
-    }
+    // Called by EditableField when a save succeeds
+    const handleFieldSaved = useCallback((fieldKey: string, val: string) => {
+        const keyMap: Record<string, keyof PersonDetail> = {
+            display_name: 'displayName', birth_year: 'birthYear', death_year: 'deathYear',
+            birth_place: 'birthPlace', death_place: 'deathPlace', phone: 'phone',
+            email: 'email', zalo: 'zalo', facebook: 'facebook',
+            current_address: 'currentAddress', hometown: 'hometown',
+            occupation: 'occupation', company: 'company', education: 'education',
+            notes: 'notes', biography: 'biography', nick_name: 'nickName',
+            surname: 'surname', first_name: 'firstName',
+        };
+        const domainKey = keyMap[fieldKey];
+        if (domainKey && person) {
+            setPerson(prev => prev ? { ...prev, [domainKey]: val || undefined } : prev);
+        }
+        setSaveMsg('✅ Đã lưu!');
+        setTimeout(() => setSaveMsg(''), 2000);
+    }, [person]);
 
-    if (!person) {
-        return (
-            <div className="text-center py-20">
-                <p className="text-muted-foreground">Không tìm thấy người này</p>
-                <Button variant="outline" className="mt-4" onClick={() => router.back()}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Quay lại
-                </Button>
-            </div>
-        );
-    }
+    if (loading) return (
+        <div className="flex items-center justify-center h-96">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+    );
+
+    if (!person) return (
+        <div className="text-center py-20">
+            <p className="text-muted-foreground">Không tìm thấy người này</p>
+            <Button variant="outline" className="mt-4" onClick={() => router.back()}>
+                <ArrowLeft className="mr-2 h-4 w-4" />Quay lại
+            </Button>
+        </div>
+    );
 
     const genderLabel = person.gender === 1 ? 'Nam' : person.gender === 2 ? 'Nữ' : 'Không rõ';
+
+    // Helper: render a field as editable (admin) or static (others)
+    const Field = ({ label, value, fieldKey, type }: {
+        label: string;
+        value: string | number | undefined | null;
+        fieldKey: string;
+        type?: 'text' | 'number' | 'textarea';
+    }) =>
+        isAdmin
+            ? <EditableField label={label} value={value} fieldKey={fieldKey} personHandle={handle} type={type ?? 'text'} onSaved={handleFieldSaved} />
+            : <InfoRow label={label} value={value ? String(value) : '—'} />;
 
     return (
         <div className="space-y-6">
@@ -90,22 +227,28 @@ export default function PersonProfilePage() {
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                     <div>
-                        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
+                        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
                             {person.displayName}
                             {person.isPrivacyFiltered && (
                                 <Badge variant="outline" className="text-amber-500 border-amber-500">
-                                    <Lock className="h-3 w-3 mr-1" />
-                                    Thông tin bị giới hạn
+                                    <Lock className="h-3 w-3 mr-1" />Thông tin bị giới hạn
                                 </Badge>
                             )}
                         </h1>
                         <p className="text-muted-foreground">
                             {genderLabel}
                             {person.generation ? ` • Đời thứ ${person.generation}` : ''}
-                            {person.chi ? ` • Chi ${person.chi}` : ''}
                             {person.isLiving && ' • Còn sống'}
                         </p>
                     </div>
+                </div>
+                <div className="flex items-center gap-2">
+                    {saveMsg && <span className="text-sm text-green-600 font-medium">{saveMsg}</span>}
+                    {isAdmin && (
+                        <Badge variant="outline" className="text-xs gap-1 text-primary border-primary">
+                            <Pencil className="h-3 w-3" /> Chế độ Admin — hover để sửa
+                        </Badge>
+                    )}
                 </div>
             </div>
 
@@ -119,26 +262,15 @@ export default function PersonProfilePage() {
             {/* Tabs */}
             <Tabs defaultValue="overview">
                 <TabsList>
-                    <TabsTrigger value="overview" className="gap-1">
-                        <User className="h-3.5 w-3.5" /> Tổng quan
-                    </TabsTrigger>
-                    <TabsTrigger value="relationships" className="gap-1">
-                        <Heart className="h-3.5 w-3.5" /> Quan hệ
-                    </TabsTrigger>
-                    <TabsTrigger value="media" className="gap-1">
-                        <Image className="h-3.5 w-3.5" /> Tư liệu
-                    </TabsTrigger>
-                    <TabsTrigger value="history" className="gap-1">
-                        <History className="h-3.5 w-3.5" /> Lịch sử
-                    </TabsTrigger>
-                    <TabsTrigger value="comments" className="gap-1">
-                        <MessageCircle className="h-3.5 w-3.5" /> Bình luận
-                    </TabsTrigger>
+                    <TabsTrigger value="overview" className="gap-1"><User className="h-3.5 w-3.5" /> Tổng quan</TabsTrigger>
+                    <TabsTrigger value="relationships" className="gap-1"><Heart className="h-3.5 w-3.5" /> Quan hệ</TabsTrigger>
+                    <TabsTrigger value="media" className="gap-1"><Image className="h-3.5 w-3.5" /> Tư liệu</TabsTrigger>
+                    <TabsTrigger value="history" className="gap-1"><History className="h-3.5 w-3.5" /> Lịch sử</TabsTrigger>
+                    <TabsTrigger value="comments" className="gap-1"><MessageCircle className="h-3.5 w-3.5" /> Bình luận</TabsTrigger>
                 </TabsList>
 
                 {/* Overview */}
                 <TabsContent value="overview" className="space-y-4">
-                    {/* Thông tin cá nhân */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-base flex items-center gap-2">
@@ -146,122 +278,77 @@ export default function PersonProfilePage() {
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="grid gap-4 md:grid-cols-2">
-                            <InfoRow label="Họ" value={person.surname || '—'} />
-                            <InfoRow label="Tên" value={person.firstName || '—'} />
+                            <Field label="Họ tên" value={person.displayName} fieldKey="display_name" />
+                            <Field label="Họ" value={person.surname} fieldKey="surname" />
+                            <Field label="Tên" value={person.firstName} fieldKey="first_name" />
                             <InfoRow label="Giới tính" value={genderLabel} />
-                            {person.nickName && <InfoRow label="Tên thường gọi" value={person.nickName} />}
-                            <InfoRow label="Ngày sinh" value={person.birthDate || (person.birthYear ? `${person.birthYear}` : '—')} />
+                            {person.nickName && <Field label="Tên thường gọi" value={person.nickName} fieldKey="nick_name" />}
+                            <Field label="Năm sinh" value={person.birthYear} fieldKey="birth_year" type="number" />
                             {person.birthYear && <InfoRow label="Năm âm lịch" value={zodiacYear(person.birthYear) || '—'} />}
-                            <InfoRow label="Nơi sinh" value={person.birthPlace || '—'} />
+                            <Field label="Nơi sinh" value={person.birthPlace} fieldKey="birth_place" />
                             {!person.isLiving && (
                                 <>
-                                    <InfoRow label="Ngày mất" value={person.deathDate || (person.deathYear ? `${person.deathYear}` : '—')} />
-                                    <InfoRow label="Nơi mất" value={person.deathPlace || '—'} />
+                                    <Field label="Năm mất" value={person.deathYear} fieldKey="death_year" type="number" />
+                                    <Field label="Nơi mất" value={person.deathPlace} fieldKey="death_place" />
                                 </>
                             )}
                         </CardContent>
                     </Card>
 
-                    {/* Liên hệ */}
-                    {(person.phone || person.email || person.zalo || person.facebook) && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Phone className="h-4 w-4" /> Liên hệ
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid gap-4 md:grid-cols-2">
-                                {person.phone && <InfoRow label="Điện thoại" value={person.phone} />}
-                                {person.email && <InfoRow label="Email" value={person.email} />}
-                                {person.zalo && <InfoRow label="Zalo" value={person.zalo} />}
-                                {person.facebook && <InfoRow label="Facebook" value={person.facebook} />}
-                            </CardContent>
-                        </Card>
-                    )}
+                    {/* Contact */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <Phone className="h-4 w-4" /> Liên hệ
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 md:grid-cols-2">
+                            <Field label="Điện thoại" value={person.phone} fieldKey="phone" />
+                            <Field label="Email" value={person.email} fieldKey="email" />
+                            <Field label="Zalo" value={person.zalo} fieldKey="zalo" />
+                            <Field label="Facebook" value={person.facebook} fieldKey="facebook" />
+                        </CardContent>
+                    </Card>
 
-                    {/* Địa chỉ */}
-                    {(person.hometown || person.currentAddress) && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <MapPin className="h-4 w-4" /> Địa chỉ
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid gap-4 md:grid-cols-2">
-                                {person.hometown && <InfoRow label="Quê quán" value={person.hometown} />}
-                                {person.currentAddress && <InfoRow label="Nơi ở hiện tại" value={person.currentAddress} />}
-                            </CardContent>
-                        </Card>
-                    )}
+                    {/* Address */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <MapPin className="h-4 w-4" /> Địa chỉ
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 md:grid-cols-2">
+                            <Field label="Quê quán" value={person.hometown} fieldKey="hometown" />
+                            <Field label="Nơi ở hiện tại" value={person.currentAddress} fieldKey="current_address" />
+                        </CardContent>
+                    </Card>
 
-                    {/* Nghề nghiệp & Học vấn */}
-                    {(person.occupation || person.company || person.education) && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Briefcase className="h-4 w-4" /> Nghề nghiệp & Học vấn
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="grid gap-4 md:grid-cols-2">
-                                {person.occupation && <InfoRow label="Nghề nghiệp" value={person.occupation} />}
-                                {person.company && <InfoRow label="Nơi công tác" value={person.company} />}
-                                {person.education && (
-                                    <div className="flex items-start gap-2">
-                                        <GraduationCap className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                                        <div>
-                                            <p className="text-xs font-medium text-muted-foreground">Học vấn</p>
-                                            <p className="text-sm">{person.education}</p>
-                                        </div>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
+                    {/* Work & Education */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <Briefcase className="h-4 w-4" /> Nghề nghiệp & Học vấn
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="grid gap-4 md:grid-cols-2">
+                            <Field label="Nghề nghiệp" value={person.occupation} fieldKey="occupation" />
+                            <Field label="Nơi công tác" value={person.company} fieldKey="company" />
+                            <Field label="Học vấn" value={person.education} fieldKey="education" type="textarea" />
+                        </CardContent>
+                    </Card>
 
-                    {/* Tiểu sử & Ghi chú */}
-                    {(person.biography || person.notes) && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <FileText className="h-4 w-4" /> Tiểu sử & Ghi chú
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {person.biography && (
-                                    <div>
-                                        <p className="text-xs font-medium text-muted-foreground mb-1">Tiểu sử</p>
-                                        <p className="text-sm leading-relaxed">{person.biography}</p>
-                                    </div>
-                                )}
-                                {person.notes && (
-                                    <div>
-                                        <p className="text-xs font-medium text-muted-foreground mb-1">Ghi chú</p>
-                                        <p className="text-sm leading-relaxed text-muted-foreground">{person.notes}</p>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
-
-                    {/* Tags */}
-                    {person.tags && person.tags.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle className="text-base flex items-center gap-2">
-                                    <Tag className="h-4 w-4" /> Nhãn
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex flex-wrap gap-2">
-                                    {person.tags.map(tag => (
-                                        <Badge key={tag} variant="secondary" className="text-xs">
-                                            {tag}
-                                        </Badge>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
+                    {/* Notes & Bio */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                                <FileText className="h-4 w-4" /> Tiểu sử & Ghi chú
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <Field label="Tiểu sử" value={person.biography} fieldKey="biography" type="textarea" />
+                            <Field label="Ghi chú" value={person.notes} fieldKey="notes" type="textarea" />
+                        </CardContent>
+                    </Card>
                 </TabsContent>
 
                 {/* Relationships */}
@@ -273,24 +360,28 @@ export default function PersonProfilePage() {
                         <CardContent>
                             <div className="space-y-3">
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Gia đình (cha/mẹ)</p>
+                                    <p className="text-sm font-medium text-muted-foreground mb-2">Cha mẹ (parent_families)</p>
                                     {person.parentFamilies && person.parentFamilies.length > 0 ? (
-                                        person.parentFamilies.map((f) => (
-                                            <Badge key={f} variant="outline" className="mr-1">{f}</Badge>
-                                        ))
+                                        <div className="flex flex-wrap gap-2">
+                                            {person.parentFamilies.map((f) => (
+                                                <Badge key={f} variant="outline">{f}</Badge>
+                                            ))}
+                                        </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground">Không có thông tin</p>
+                                        <p className="text-sm text-muted-foreground italic">Chưa có thông tin cha mẹ</p>
                                     )}
                                 </div>
                                 <Separator />
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Gia đình (vợ/chồng, con)</p>
+                                    <p className="text-sm font-medium text-muted-foreground mb-2">Vợ/chồng & con (families)</p>
                                     {person.families && person.families.length > 0 ? (
-                                        person.families.map((f) => (
-                                            <Badge key={f} variant="outline" className="mr-1">{f}</Badge>
-                                        ))
+                                        <div className="flex flex-wrap gap-2">
+                                            {person.families.map((f) => (
+                                                <Badge key={f} variant="outline">{f}</Badge>
+                                            ))}
+                                        </div>
                                     ) : (
-                                        <p className="text-sm text-muted-foreground">Không có thông tin</p>
+                                        <p className="text-sm text-muted-foreground italic">Chưa có thông tin gia đình</p>
                                     )}
                                 </div>
                             </div>
@@ -301,16 +392,12 @@ export default function PersonProfilePage() {
                 {/* Media */}
                 <TabsContent value="media">
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Tư liệu liên quan</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="text-base">Tư liệu liên quan</CardTitle></CardHeader>
                         <CardContent>
                             <p className="text-muted-foreground text-sm">
                                 {person.mediaCount ? `${person.mediaCount} tư liệu` : 'Chưa có tư liệu nào'}
                             </p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                                Tính năng xem chi tiết sẽ được bổ sung trong Epic 3 (Media Library).
-                            </p>
+                            <p className="text-xs text-muted-foreground mt-2">Tính năng xem chi tiết sẽ được bổ sung trong Epic 3 (Media Library).</p>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -318,13 +405,9 @@ export default function PersonProfilePage() {
                 {/* History */}
                 <TabsContent value="history">
                     <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Lịch sử thay đổi</CardTitle>
-                        </CardHeader>
+                        <CardHeader><CardTitle className="text-base">Lịch sử thay đổi</CardTitle></CardHeader>
                         <CardContent>
-                            <p className="text-muted-foreground text-sm">
-                                Audit log cho entity này sẽ được bổ sung trong Epic 4.
-                            </p>
+                            <p className="text-muted-foreground text-sm">Audit log sẽ được bổ sung trong Epic 4.</p>
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -343,15 +426,6 @@ export default function PersonProfilePage() {
                     </Card>
                 </TabsContent>
             </Tabs>
-        </div>
-    );
-}
-
-function InfoRow({ label, value }: { label: string; value: string }) {
-    return (
-        <div>
-            <p className="text-xs font-medium text-muted-foreground">{label}</p>
-            <p className="text-sm">{value}</p>
         </div>
     );
 }

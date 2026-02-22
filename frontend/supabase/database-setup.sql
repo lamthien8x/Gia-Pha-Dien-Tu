@@ -83,28 +83,41 @@ CREATE TABLE IF NOT EXISTS profiles (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     email TEXT UNIQUE NOT NULL,
     display_name TEXT,
-    role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'editor', 'archivist', 'member', 'guest')),
     person_handle TEXT,
     avatar_url TEXT,
+    status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'suspended', 'pending')),
     created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Auto-create profile on signup
 -- ⚠️ ĐỔI EMAIL ADMIN: thay 'your-admin@example.com' bằng email admin thật
+-- Hoặc dùng câu SQL bên dưới sau khi đăng ký:
+--   UPDATE profiles SET role = 'admin' WHERE email = 'your-real-email@example.com';
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
 DECLARE
     user_email TEXT;
+    user_display_name TEXT;
 BEGIN
     user_email := COALESCE(NEW.email, NEW.raw_user_meta_data->>'email', '');
+    user_display_name := COALESCE(
+        NEW.raw_user_meta_data->>'display_name',
+        split_part(user_email, '@', 1),
+        ''
+    );
     IF user_email != '' THEN
-        INSERT INTO profiles (id, email, role)
+        INSERT INTO profiles (id, email, display_name, role, status)
         VALUES (
             NEW.id,
             user_email,
-            CASE WHEN user_email = 'your-admin@example.com' THEN 'admin' ELSE 'viewer' END
+            user_display_name,
+            CASE WHEN user_email = 'lamthien8x@gmail.com' THEN 'admin' ELSE 'member' END,
+            'active'
         )
-        ON CONFLICT (email) DO UPDATE SET id = NEW.id;
+        ON CONFLICT (email) DO UPDATE
+            SET id = NEW.id,
+                display_name = EXCLUDED.display_name;
     END IF;
     RETURN NEW;
 END;
@@ -160,7 +173,25 @@ CREATE INDEX IF NOT EXISTS idx_comments_person ON comments(person_handle);
 
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  5. ROW LEVEL SECURITY (RLS)                            ║
+-- ║  5. INVITE LINKS (mã mời đăng ký)                     ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS invite_links (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    code TEXT UNIQUE NOT NULL,
+    role TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'editor', 'archivist', 'member', 'guest')),
+    max_uses INT,
+    used_count INT DEFAULT 0,
+    expires_at TIMESTAMPTZ,
+    created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_invite_links_code ON invite_links(code);
+
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  6. ROW LEVEL SECURITY (RLS)                            ║
 -- ╚══════════════════════════════════════════════════════════╝
 
 -- People & Families: public read, authenticated write, admin delete
@@ -210,9 +241,20 @@ CREATE POLICY "owner or admin can delete comments" ON comments
 ALTER TABLE comments ADD CONSTRAINT comments_content_length CHECK (char_length(content) BETWEEN 1 AND 2000);
 ALTER TABLE contributions ADD CONSTRAINT contributions_value_length CHECK (char_length(new_value) <= 5000);
 
+-- Invite Links: admin only
+ALTER TABLE invite_links ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "admin can read invite_links" ON invite_links FOR SELECT
+    USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "admin can insert invite_links" ON invite_links FOR INSERT
+    WITH CHECK (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "admin can update invite_links" ON invite_links FOR UPDATE
+    USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+CREATE POLICY "admin can delete invite_links" ON invite_links FOR DELETE
+    USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
 
 -- ╔══════════════════════════════════════════════════════════╗
--- ║  6. DỮ LIỆU MẪU DEMO (xóa phần này nếu dùng dữ liệu thật)║
+-- ║  7. DỮ LIỆU MẪU DEMO (xóa phần này nếu dùng dữ liệu thật)║
 -- ╚══════════════════════════════════════════════════════════╝
 
 -- Dòng họ mẫu: Họ Nguyễn Văn — 4 thế hệ, 15 thành viên
@@ -255,6 +297,33 @@ INSERT INTO families (handle, father_handle, mother_handle, children) VALUES
 ('F005', 'P005', 'P015', '{"P010","P011"}'),
 ('F006', 'P007', NULL,   '{"P012"}')
 ON CONFLICT (handle) DO NOTHING;
+
+-- Invite links (mã mời đăng ký mẫu)
+INSERT INTO invite_links (code, role, max_uses, used_count) VALUES
+('FAMILY2026', 'member', 100, 0),
+('ADMIN2026', 'admin', 1, 0)
+ON CONFLICT (code) DO NOTHING;
+
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  8. HELPER — Nâng quyền Admin                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+-- Chạy câu lệnh này trong SQL Editor để promote user thành admin:
+-- (thay 'your-real-email@example.com' bằng email thật)
+--
+--   UPDATE profiles
+--   SET role = 'admin'
+--   WHERE email = 'your-real-email@example.com';
+--
+-- Hoặc dùng script bên dưới để xem danh sách users hiện tại:
+--   SELECT id, email, role, status FROM profiles ORDER BY created_at;
+--
+-- Nếu bảng profiles chưa có role mới (editor/archivist), chạy:
+--   ALTER TABLE profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+--   ALTER TABLE profiles ADD CONSTRAINT profiles_role_check
+--       CHECK (role IN ('admin','editor','archivist','member','guest'));
+--   ALTER TABLE invite_links DROP CONSTRAINT IF EXISTS invite_links_role_check;
+--   ALTER TABLE invite_links ADD CONSTRAINT invite_links_role_check
+--       CHECK (role IN ('admin','editor','archivist','member','guest'));
 
 
 -- ============================================================

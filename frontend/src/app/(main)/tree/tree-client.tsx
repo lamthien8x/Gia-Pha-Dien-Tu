@@ -266,6 +266,13 @@ export default function TreeViewPage() {
     const [isDragging, setIsDragging] = useState(false);
     const dragRef = useRef({ startX: 0, startY: 0, startTx: 0, startTy: 0 });
     const pinchRef = useRef({ initialDist: 0, initialScale: 1 });
+    // Ref to track transform without causing re-renders (for smooth touch handling)
+    const transformRef = useRef(transform);
+
+    // Keep transformRef in sync with state
+    useEffect(() => {
+        transformRef.current = transform;
+    }, [transform]);
 
     // Fetch data
     useEffect(() => {
@@ -587,13 +594,24 @@ export default function TreeViewPage() {
 
     // Stable callbacks for PersonCard
     const handleCardHover = useCallback((h: string | null) => setHoveredHandle(h), []);
-    const handleCardClick = useCallback((handle: string, x: number, y: number) => {
+    const handleCardClick = useCallback((handle: string, canvasX: number, canvasY: number) => {
         if (editorMode) {
             setSelectedCard(handle);
             return;
         }
-        setContextMenu({ handle, x, y });
-    }, [editorMode]);
+        // Convert canvas coords → fixed (screen) coords
+        const vp = viewportRef.current;
+        if (!vp) return;
+        const vpRect = vp.getBoundingClientRect();
+        const screenX = canvasX * transform.scale + transform.x + vpRect.left;
+        const screenY = canvasY * transform.scale + transform.y + vpRect.top;
+        // Clamp so menu stays within window
+        const menuW = 228;
+        const menuH = 300;
+        const clampedX = screenX + menuW > window.innerWidth ? screenX - menuW - 8 : screenX + 8;
+        const clampedY = screenY + menuH > window.innerHeight ? screenY - menuH : screenY;
+        setContextMenu({ handle, x: clampedX, y: clampedY });
+    }, [editorMode, transform]);
     const handleCardFocus = useCallback((handle: string) => {
         setFocusPerson(handle);
     }, []);
@@ -630,7 +648,8 @@ export default function TreeViewPage() {
     const handleMouseDown = (e: React.MouseEvent) => {
         if (e.button !== 0) return;
         setIsDragging(true);
-        dragRef.current = { startX: e.clientX, startY: e.clientY, startTx: transform.x, startTy: transform.y };
+        const currentTransform = transformRef.current;
+        dragRef.current = { startX: e.clientX, startY: e.clientY, startTx: currentTransform.x, startTy: currentTransform.y };
     };
     const handleMouseMove = (e: React.MouseEvent) => {
         if (!isDragging) return;
@@ -650,34 +669,59 @@ export default function TreeViewPage() {
             const mx = e.clientX - rect.left;
             const my = e.clientY - rect.top;
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
-            setTransform(t => {
-                const newScale = Math.min(Math.max(t.scale * delta, 0.15), 3);
-                const ratio = newScale / t.scale;
-                return { scale: newScale, x: mx - (mx - t.x) * ratio, y: my - (my - t.y) * ratio };
+            const currentTransform = transformRef.current;
+            const newScale = Math.min(Math.max(currentTransform.scale * delta, 0.15), 3);
+            const ratio = newScale / currentTransform.scale;
+            setTransform({
+                scale: newScale,
+                x: mx - (mx - currentTransform.x) * ratio,
+                y: my - (my - currentTransform.y) * ratio
             });
         };
         el.addEventListener('wheel', onWheel, { passive: false });
         return () => el.removeEventListener('wheel', onWheel);
     }, []);
 
-    // === Touch handlers ===
+    // === Touch handlers (optimized with requestAnimationFrame) ===
     useEffect(() => {
         const el = viewportRef.current;
         if (!el) return;
 
         let touching = false;
-        let lastTouches: Touch[] = [];
+        let rafId: number | null = null;
+        let pendingUpdate: { x: number; y: number; scale: number } | null = null;
+
+        const scheduleUpdate = (newTransform: { x: number; y: number; scale: number }) => {
+            pendingUpdate = newTransform;
+            if (rafId === null) {
+                rafId = requestAnimationFrame(() => {
+                    if (pendingUpdate) {
+                        setTransform(pendingUpdate);
+                        pendingUpdate = null;
+                    }
+                    rafId = null;
+                });
+            }
+        };
 
         const onTouchStart = (e: TouchEvent) => {
+            // Cancel any pending update
+            if (rafId !== null) {
+                cancelAnimationFrame(rafId);
+                rafId = null;
+                pendingUpdate = null;
+            }
+
             if (e.touches.length === 1) {
                 touching = true;
                 const t = e.touches[0];
-                dragRef.current = { startX: t.clientX, startY: t.clientY, startTx: transform.x, startTy: transform.y };
+                const currentTransform = transformRef.current;
+                dragRef.current = { startX: t.clientX, startY: t.clientY, startTx: currentTransform.x, startTy: currentTransform.y };
             } else if (e.touches.length === 2) {
                 const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
-                pinchRef.current = { initialDist: dist, initialScale: transform.scale };
+                const currentTransform = transformRef.current;
+                pinchRef.current = { initialDist: dist, initialScale: currentTransform.scale };
             }
-            lastTouches = Array.from(e.touches);
         };
 
         const onTouchMove = (e: TouchEvent) => {
@@ -686,7 +730,11 @@ export default function TreeViewPage() {
                 const t = e.touches[0];
                 const dx = t.clientX - dragRef.current.startX;
                 const dy = t.clientY - dragRef.current.startY;
-                setTransform(prev => ({ ...prev, x: dragRef.current.startTx + dx, y: dragRef.current.startTy + dy }));
+                scheduleUpdate({
+                    x: dragRef.current.startTx + dx,
+                    y: dragRef.current.startTy + dy,
+                    scale: transformRef.current.scale
+                });
             } else if (e.touches.length === 2) {
                 const dist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
                 const ratio = dist / pinchRef.current.initialDist;
@@ -698,25 +746,37 @@ export default function TreeViewPage() {
                 const mx = midX - rect.left;
                 const my = midY - rect.top;
 
-                setTransform(prev => {
-                    const r = newScale / prev.scale;
-                    return { scale: newScale, x: mx - (mx - prev.x) * r, y: my - (my - prev.y) * r };
+                const currentTransform = transformRef.current;
+                const r = newScale / currentTransform.scale;
+                scheduleUpdate({
+                    scale: newScale,
+                    x: mx - (mx - currentTransform.x) * r,
+                    y: my - (my - currentTransform.y) * r
                 });
             }
-            lastTouches = Array.from(e.touches);
         };
 
-        const onTouchEnd = () => { touching = false; };
+        const onTouchEnd = () => {
+            touching = false;
+            // Immediately apply any pending update on touch end
+            if (rafId !== null && pendingUpdate) {
+                cancelAnimationFrame(rafId);
+                setTransform(pendingUpdate);
+                rafId = null;
+                pendingUpdate = null;
+            }
+        };
 
         el.addEventListener('touchstart', onTouchStart, { passive: false });
         el.addEventListener('touchmove', onTouchMove, { passive: false });
         el.addEventListener('touchend', onTouchEnd);
         return () => {
+            if (rafId !== null) cancelAnimationFrame(rafId);
             el.removeEventListener('touchstart', onTouchStart);
             el.removeEventListener('touchmove', onTouchMove);
             el.removeEventListener('touchend', onTouchEnd);
         };
-    }, [transform.x, transform.y, transform.scale]);
+    }, []); // Empty deps - listeners attached once
 
     // Pan to person
     const panToPerson = useCallback((handle: string) => {
@@ -769,7 +829,7 @@ export default function TreeViewPage() {
     return (
         <div className="flex flex-col h-[calc(100vh-80px)]">
             {/* Header */}
-            <div className="flex items-center justify-between flex-wrap gap-2 px-1 pb-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-1 pb-2">
                 <div>
                     <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
                         <TreePine className="h-5 w-5" /> Cây gia phả
@@ -784,19 +844,19 @@ export default function TreeViewPage() {
                         )}
                     </p>
                 </div>
-                <div className="flex items-center gap-1.5 flex-wrap">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
                     {/* View modes */}
                     <div className="flex rounded-lg border overflow-hidden text-xs">
                         {([['full', 'Toàn cảnh', Eye], ['ancestor', 'Tổ tiên', Users], ['descendant', 'Hậu duệ', GitBranch]] as const).map(([mode, label, Icon]) => (
                             <button key={mode} onClick={() => changeViewMode(mode)}
                                 className={`px-2.5 py-1.5 font-medium flex items-center gap-1 transition-colors ${mode !== 'full' ? 'border-l' : ''} ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                                <Icon className="h-3.5 w-3.5" /> {label}
+                                <Icon className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{label}</span>
                             </button>
                         ))}
                     </div>
                     {/* Search */}
-                    <div className="relative">
-                        <div className="relative w-44">
+                    <div className="relative flex-1 sm:flex-none">
+                        <div className="relative w-full sm:w-44">
                             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <Input placeholder="Tìm kiếm..." value={searchQuery}
                                 onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); }}
@@ -823,29 +883,29 @@ export default function TreeViewPage() {
                         )}
                     </div>
                     {/* Controls */}
-                    <div className="flex gap-0.5">
-                        <Button variant="outline" size="icon" className="h-8 w-8" title="Thu gọn tất cả" onClick={collapseAll}><ChevronsDownUp className="h-3.5 w-3.5" /></Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8" title="Mở rộng tất cả" onClick={expandAll}><ChevronsUpDown className="h-3.5 w-3.5" /></Button>
+                    <div className="flex gap-0.5 overflow-x-auto pb-1 sm:pb-0">
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Thu gọn tất cả" onClick={collapseAll}><ChevronsDownUp className="h-3.5 w-3.5" /></Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Mở rộng tất cả" onClick={expandAll}><ChevronsUpDown className="h-3.5 w-3.5" /></Button>
                         <div className="w-px bg-border mx-0.5" />
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setTransform(t => {
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setTransform(t => {
                             const vw = viewportRef.current?.clientWidth ?? 0; const vh = viewportRef.current?.clientHeight ?? 0;
                             const cx = vw / 2; const cy = vh / 2;
                             const ns = Math.min(t.scale * 1.3, 3); const r = ns / t.scale;
                             return { scale: ns, x: cx - (cx - t.x) * r, y: cy - (cy - t.y) * r };
                         })}><ZoomIn className="h-3.5 w-3.5" /></Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setTransform(t => {
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setTransform(t => {
                             const vw = viewportRef.current?.clientWidth ?? 0; const vh = viewportRef.current?.clientHeight ?? 0;
                             const cx = vw / 2; const cy = vh / 2;
                             const ns = Math.max(t.scale / 1.3, 0.15); const r = ns / t.scale;
                             return { scale: ns, x: cx - (cx - t.x) * r, y: cy - (cy - t.y) * r };
                         })}><ZoomOut className="h-3.5 w-3.5" /></Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={fitAll}><Maximize2 className="h-3.5 w-3.5" /></Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={fitAll}><Maximize2 className="h-3.5 w-3.5" /></Button>
                         <div className="w-px bg-border mx-0.5" />
                         {isAdmin && (
                             <Button
                                 variant={editorMode ? 'default' : 'outline'}
                                 size="icon"
-                                className={`h-8 w-8 ${editorMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
+                                className={`h-8 w-8 shrink-0 ${editorMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
                                 title={editorMode ? 'Tắt chỉnh sửa' : 'Chế độ chỉnh sửa'}
                                 onClick={() => { setEditorMode(m => !m); setSelectedCard(null); }}
                             >
@@ -857,9 +917,9 @@ export default function TreeViewPage() {
             </div>
 
             {/* Tree viewport + Editor panel row */}
-            <div className="flex-1 flex gap-0 min-h-0">
+            <div className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0">
                 <div ref={viewportRef}
-                    className="flex-1 relative overflow-hidden rounded-xl border-2 bg-gradient-to-br from-background to-muted/30 cursor-grab active:cursor-grabbing select-none"
+                    className="tree-viewport flex-1 relative overflow-hidden rounded-xl border-2 bg-gradient-to-br from-background to-muted/30 cursor-grab active:cursor-grabbing select-none"
                     onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
                     onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
                     onClick={() => { setShowSearch(false); setContextMenu(null); if (editorMode) setSelectedCard(null); }}
@@ -870,9 +930,10 @@ export default function TreeViewPage() {
                         </div>
                     ) : layout && (
                         <div style={{
-                            transform: `translate(${transform.x}px, ${transform.y}px) scale(${transform.scale})`,
+                            transform: `translate3d(${transform.x}px, ${transform.y}px, 0) scale(${transform.scale})`,
                             transformOrigin: '0 0', width: layout.width, height: layout.height,
                             position: 'absolute', top: 0, left: 0,
+                            willChange: 'transform',
                         }}>
                             {/* SVG connections — batched into 2 paths */}
                             <svg className="absolute inset-0 pointer-events-none" width={layout.width} height={layout.height}
@@ -920,25 +981,7 @@ export default function TreeViewPage() {
                             })}
 
                             {/* Context menu on card */}
-                            {contextMenu && (() => {
-                                const person = treeData?.people.find(p => p.handle === contextMenu.handle);
-                                if (!person) return null;
-                                return (
-                                    <CardContextMenu
-                                        person={person}
-                                        x={contextMenu.x}
-                                        y={contextMenu.y}
-                                        onViewDetail={() => { router.push(`/people/${person.handle}`); setContextMenu(null); }}
-                                        onShowDescendants={() => { setFocusPerson(person.handle); setViewMode('descendant'); setContextMenu(null); }}
-                                        onShowAncestors={() => { setFocusPerson(person.handle); setViewMode('ancestor'); setContextMenu(null); }}
-                                        onSetFocus={() => { panToPerson(person.handle); setContextMenu(null); }}
-                                        onShowFull={() => { setViewMode('full'); setContextMenu(null); }}
-                                        onCopyLink={() => { copyTreeLink(person.handle); setContextMenu(null); }}
-                                        onContribute={() => { setContributePerson({ handle: person.handle, name: person.displayName }); setContextMenu(null); }}
-                                        onClose={() => setContextMenu(null)}
-                                    />
-                                );
-                            })()}
+                            {/* context menu moved to viewport level below to avoid canvas clip */}
                         </div>
                     )}
 
@@ -983,6 +1026,27 @@ export default function TreeViewPage() {
                         </div>
                     )}
                 </div>
+
+                {/* Context menu — rendered at viewport level, not clipped by canvas overflow */}
+                {contextMenu && (() => {
+                    const person = treeData?.people.find(p => p.handle === contextMenu.handle);
+                    if (!person) return null;
+                    return (
+                        <CardContextMenu
+                            person={person}
+                            x={contextMenu.x}
+                            y={contextMenu.y}
+                            onViewDetail={() => { router.push(`/people/${person.handle}`); setContextMenu(null); }}
+                            onShowDescendants={() => { setFocusPerson(person.handle); setViewMode('descendant'); setContextMenu(null); }}
+                            onShowAncestors={() => { setFocusPerson(person.handle); setViewMode('ancestor'); setContextMenu(null); }}
+                            onSetFocus={() => { panToPerson(person.handle); setContextMenu(null); }}
+                            onShowFull={() => { setViewMode('full'); setContextMenu(null); }}
+                            onCopyLink={() => { copyTreeLink(person.handle); setContextMenu(null); }}
+                            onContribute={() => { setContributePerson({ handle: person.handle, name: person.displayName }); setContextMenu(null); }}
+                            onClose={() => setContextMenu(null)}
+                        />
+                    );
+                })()}
 
                 {/* Editor Sidebar Panel */}
                 {editorMode && (
@@ -1081,8 +1145,8 @@ function CardContextMenu({ person, x, y, onViewDetail, onShowDescendants, onShow
 }) {
     return (
         <div
-            className="absolute z-50 animate-in fade-in zoom-in-95 duration-150"
-            style={{ left: x + 8, top: y + 8 }}
+            className="fixed z-[200] animate-in fade-in zoom-in-95 duration-150"
+            style={{ left: x, top: y }}
             onClick={(e) => e.stopPropagation()}
         >
             <div className="bg-white/95 backdrop-blur-lg border border-slate-200 rounded-xl shadow-xl
@@ -1280,7 +1344,7 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
                     </div>
                     {isPatri && (
                         <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500
-                            text-white text-[8px] flex items-center justify-center shadow-sm font-bold ring-1 ring-white">Lê</span>
+                            text-white text-[8px] flex items-center justify-center shadow-sm font-bold ring-1 ring-white">Hồ</span>
                     )}
                 </div>
 
@@ -1605,7 +1669,7 @@ function EditorPanel({ selectedCard, treeData, onReorderChildren, onMoveChild, o
     };
 
     return (
-        <div className="w-72 bg-background border-l flex flex-col overflow-hidden flex-shrink-0">
+        <div className="w-full lg:w-72 bg-background border-l lg:border-t-0 border-t flex flex-col overflow-hidden flex-shrink-0 max-h-[50vh] lg:max-h-none">
             {/* Header */}
             <div className="flex items-center justify-between px-3 py-2 border-b bg-blue-50">
                 <div className="flex items-center gap-2">

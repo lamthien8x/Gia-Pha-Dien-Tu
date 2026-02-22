@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
@@ -9,8 +9,14 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Gia phả dòng họ Lê Huy',
-  description: 'Gia phả dòng họ Lê Huy — Quản lý gia phả & kết nối cộng đồng dòng họ',
+  title: 'Gia phả dòng họ Hồ',
+  description: 'Gia phả dòng họ Hồ — Quản lý gia phả & kết nối cộng đồng dòng họ',
+};
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 5,
 };
 
 export default function RootLayout({

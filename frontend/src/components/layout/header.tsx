@@ -31,11 +31,11 @@ export function Header() {
     };
 
     return (
-        <header className="sticky top-0 z-50 flex h-14 items-center justify-between border-b bg-card/80 backdrop-blur-sm px-4 lg:px-6">
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-between border-b bg-card/80 backdrop-blur-sm px-4 pl-14 md:pl-4 lg:px-6">
             {/* Left side */}
             <div className="flex items-center gap-2">
-                <h2 className="text-sm font-medium text-muted-foreground">
-                    Dòng họ Lê Huy
+                <h2 className="text-sm font-medium text-muted-foreground truncate">
+                    Dòng họ Hồ
                 </h2>
             </div>
 

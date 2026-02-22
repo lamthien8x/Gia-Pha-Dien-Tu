@@ -72,7 +72,7 @@ export default function LoginPage() {
                         <TreePine className="h-8 w-8 text-primary" />
                     </div>
                 </div>
-                <CardTitle className="text-2xl font-bold">Gia phả họ Lê</CardTitle>
+                <CardTitle className="text-2xl font-bold">Gia phả họ Hồ</CardTitle>
                 <CardDescription>
                     {mode === 'login'
                         ? 'Đăng nhập để quản lý & đóng góp thông tin'
@@ -92,7 +92,7 @@ export default function LoginPage() {
                     {mode === 'register' && (
                         <div className="space-y-2">
                             <label className="text-sm font-medium" htmlFor="displayName">Họ tên</label>
-                            <Input id="displayName" placeholder="Nguyễn Văn A" {...register('displayName')} />
+                            <Input id="displayName" placeholder="Hồ Văn A" {...register('displayName')} />
                         </div>
                     )}
 

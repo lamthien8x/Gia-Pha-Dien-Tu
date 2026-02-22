@@ -40,6 +40,14 @@ const ROLE_COLORS: Record<string, string> = {
     guest: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
 };
 
+const ROLE_LABELS: Record<string, string> = {
+    admin: 'Admin',
+    editor: 'Editor',
+    archivist: 'Archivist',
+    member: 'Member',
+    guest: 'Guest',
+};
+
 interface ProfileUser {
     id: string;
     email: string;
@@ -234,9 +242,11 @@ export default function AdminUsersPage() {
                                         value={inviteRole}
                                         onChange={e => setInviteRole(e.target.value)}
                                     >
+                                        <option value="guest">Guest — Chỉ xem</option>
                                         <option value="member">Member — Xem và đề xuất chỉnh sửa</option>
                                         <option value="editor">Editor — Chỉnh sửa trực tiếp</option>
                                         <option value="archivist">Archivist — Quản lý tư liệu</option>
+                                        <option value="admin">Admin — Toàn quyền</option>
                                     </select>
                                 </div>
                                 <div className="space-y-2">
@@ -289,12 +299,12 @@ export default function AdminUsersPage() {
                                         <TableCell>{user.email}</TableCell>
                                         <TableCell>
                                             <Badge variant="secondary" className={ROLE_COLORS[user.role] || ''}>
-                                                {user.role.toUpperCase()}
+                                                {ROLE_LABELS[user.role] || user.role.toUpperCase()}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>
                                             <Badge variant={user.status === 'active' ? 'default' : 'destructive'}>
-                                                {user.status === 'active' ? 'Hoạt động' : 'Tạm ngưng'}
+                                                {user.status === 'active' ? 'Hoạt động' : user.status === 'suspended' ? 'Tạm ngưng' : 'Chờ duyệt'}
                                             </Badge>
                                         </TableCell>
                                         <TableCell>{new Date(user.created_at).toLocaleDateString('vi-VN')}</TableCell>
@@ -307,20 +317,26 @@ export default function AdminUsersPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end">
                                                     <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'admin')}>
-                                                        Đặt Admin
+                                                        🔴 Đặt Admin
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'editor')}>
-                                                        Đặt Editor
+                                                        🔵 Đặt Editor
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'archivist')}>
+                                                        🟣 Đặt Archivist
                                                     </DropdownMenuItem>
                                                     <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'member')}>
-                                                        Đặt Member
+                                                        🟢 Đặt Member
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem onClick={() => handleChangeRole(user.id, 'guest')}>
+                                                        ⚪ Đặt Guest
                                                     </DropdownMenuItem>
                                                     <DropdownMenuSeparator />
                                                     <DropdownMenuItem
                                                         className={user.status === 'active' ? 'text-destructive' : 'text-green-600'}
                                                         onClick={() => handleToggleStatus(user.id, user.status)}
                                                     >
-                                                        {user.status === 'active' ? 'Tạm ngưng' : 'Kích hoạt lại'}
+                                                        {user.status === 'active' ? '⏸ Tạm ngưng' : '▶ Kích hoạt lại'}
                                                     </DropdownMenuItem>
                                                 </DropdownMenuContent>
                                             </DropdownMenu>

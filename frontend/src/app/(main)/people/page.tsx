@@ -78,17 +78,17 @@ export default function PeopleListPage() {
             </div>
 
             {/* Filters */}
-            <div className="flex flex-wrap gap-3 items-center">
+            <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center">
                 <div className="relative flex-1 min-w-[200px] max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input placeholder="Tìm theo tên..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button variant={genderFilter === null ? 'default' : 'outline'} size="sm" onClick={() => setGenderFilter(null)}>Tất cả</Button>
                     <Button variant={genderFilter === 1 ? 'default' : 'outline'} size="sm" onClick={() => setGenderFilter(1)}>Nam</Button>
                     <Button variant={genderFilter === 2 ? 'default' : 'outline'} size="sm" onClick={() => setGenderFilter(2)}>Nữ</Button>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                     <Button variant={livingFilter === null ? 'default' : 'outline'} size="sm" onClick={() => setLivingFilter(null)}>Tất cả</Button>
                     <Button variant={livingFilter === true ? 'default' : 'outline'} size="sm" onClick={() => setLivingFilter(true)}>Còn sống</Button>
                     <Button variant={livingFilter === false ? 'default' : 'outline'} size="sm" onClick={() => setLivingFilter(false)}>Đã mất</Button>
@@ -103,50 +103,52 @@ export default function PeopleListPage() {
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
                         </div>
                     ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Họ tên</TableHead>
-                                    <TableHead>Giới tính</TableHead>
-                                    <TableHead>Năm sinh</TableHead>
-                                    <TableHead>Năm mất</TableHead>
-                                    <TableHead>Trạng thái</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filtered.map((p) => (
-                                    <TableRow
-                                        key={p.handle}
-                                        className="cursor-pointer hover:bg-accent/50"
-                                        onClick={() => router.push(`/people/${p.handle}`)}
-                                    >
-                                        <TableCell className="font-medium">
-                                            {p.displayName}
-                                            {p.isPrivacyFiltered && <span className="ml-1 text-amber-500">🔒</span>}
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">
-                                                {p.gender === 1 ? 'Nam' : p.gender === 2 ? 'Nữ' : '?'}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell>{p.birthYear || '—'}</TableCell>
-                                        <TableCell>{p.deathYear || (p.isLiving ? '—' : '?')}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={p.isLiving ? 'default' : 'secondary'}>
-                                                {p.isLiving ? 'Còn sống' : 'Đã mất'}
-                                            </Badge>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {filtered.length === 0 && (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
                                     <TableRow>
-                                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                                            {search ? 'Không tìm thấy kết quả' : 'Chưa có dữ liệu gia phả'}
-                                        </TableCell>
+                                        <TableHead>Họ tên</TableHead>
+                                        <TableHead className="hidden sm:table-cell">Giới tính</TableHead>
+                                        <TableHead>Năm sinh</TableHead>
+                                        <TableHead className="hidden md:table-cell">Năm mất</TableHead>
+                                        <TableHead>Trạng thái</TableHead>
                                     </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                                </TableHeader>
+                                <TableBody>
+                                    {filtered.map((p) => (
+                                        <TableRow
+                                            key={p.handle}
+                                            className="cursor-pointer hover:bg-accent/50"
+                                            onClick={() => router.push(`/people/${p.handle}`)}
+                                        >
+                                            <TableCell className="font-medium">
+                                                {p.displayName}
+                                                {p.isPrivacyFiltered && <span className="ml-1 text-amber-500">🔒</span>}
+                                            </TableCell>
+                                            <TableCell className="hidden sm:table-cell">
+                                                <Badge variant="outline">
+                                                    {p.gender === 1 ? 'Nam' : p.gender === 2 ? 'Nữ' : '?'}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>{p.birthYear || '—'}</TableCell>
+                                            <TableCell className="hidden md:table-cell">{p.deathYear || (p.isLiving ? '—' : '?')}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={p.isLiving ? 'default' : 'secondary'}>
+                                                    {p.isLiving ? 'Còn sống' : 'Đã mất'}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {filtered.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                                                {search ? 'Không tìm thấy kết quả' : 'Chưa có dữ liệu gia phả'}
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
                     )}
                 </CardContent>
             </Card>

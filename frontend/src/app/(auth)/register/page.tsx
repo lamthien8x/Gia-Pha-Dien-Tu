@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { TreePine, Eye, EyeOff } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,6 +16,7 @@ const registerSchema = z.object({
     displayName: z.string().min(2, 'Tên tối thiểu 2 ký tự').max(100),
     password: z.string().min(8, 'Mật khẩu tối thiểu 8 ký tự'),
     confirmPassword: z.string(),
+    inviteCode: z.string().optional(),
 }).refine((data) => data.password === data.confirmPassword, {
     message: 'Mật khẩu xác nhận không khớp',
     path: ['confirmPassword'],
@@ -25,8 +26,6 @@ type RegisterForm = z.infer<typeof registerSchema>;
 
 function RegisterContent() {
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const inviteCode = searchParams.get('code') || '';
     const [showPassword, setShowPassword] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -35,33 +34,41 @@ function RegisterContent() {
         register,
         handleSubmit,
         formState: { errors },
-    } = useForm<RegisterForm>({ resolver: zodResolver(registerSchema) });
+    } = useForm<RegisterForm>({
+        resolver: zodResolver(registerSchema),
+    });
 
     const onSubmit = async (data: RegisterForm) => {
-        if (!inviteCode) {
-            setError('Bạn cần có mã mời để đăng ký');
-            return;
-        }
-
         try {
             setError('');
             setLoading(true);
 
-            // Validate invite code against Supabase
-            const { data: invite, error: inviteErr } = await supabase
-                .from('invite_links')
-                .select('*')
-                .eq('code', inviteCode)
-                .single();
+            // Validate invite code nếu có cung cấp
+            let userRole = 'member';
+            if (data.inviteCode && data.inviteCode.trim()) {
+                const { data: invite, error: inviteErr } = await supabase
+                    .from('invite_links')
+                    .select('*')
+                    .eq('code', data.inviteCode.trim())
+                    .single();
 
-            if (inviteErr || !invite) {
-                setError('Mã mời không hợp lệ hoặc đã hết hạn');
-                return;
-            }
+                if (inviteErr || !invite) {
+                    setError('Mã mời không hợp lệ hoặc đã hết hạn. Để trống mã mời để đăng ký với quyền member.');
+                    return;
+                }
 
-            if (invite.max_uses && invite.used_count >= invite.max_uses) {
-                setError('Mã mời đã hết lượt sử dụng');
-                return;
+                if (invite.max_uses && invite.used_count >= invite.max_uses) {
+                    setError('Mã mời đã hết lượt sử dụng');
+                    return;
+                }
+
+                userRole = invite.role || 'member';
+
+                // Increment invite used_count
+                await supabase
+                    .from('invite_links')
+                    .update({ used_count: (invite.used_count || 0) + 1 })
+                    .eq('id', invite.id);
             }
 
             // Sign up via Supabase Auth
@@ -71,7 +78,7 @@ function RegisterContent() {
                 options: {
                     data: {
                         display_name: data.displayName,
-                        invite_code: inviteCode,
+                        invite_code: data.inviteCode,
                     },
                 },
             });
@@ -81,19 +88,13 @@ function RegisterContent() {
                 return;
             }
 
-            // Increment invite used_count
-            await supabase
-                .from('invite_links')
-                .update({ used_count: (invite.used_count || 0) + 1 })
-                .eq('id', invite.id);
-
             // Create profile
             if (authData.user) {
                 await supabase.from('profiles').upsert({
                     id: authData.user.id,
                     email: data.email,
                     display_name: data.displayName,
-                    role: invite.role || 'member',
+                    role: userRole,
                     status: 'active',
                 });
             }
@@ -114,25 +115,26 @@ function RegisterContent() {
                         <TreePine className="h-8 w-8 text-primary" />
                     </div>
                 </div>
-                <CardTitle className="text-2xl font-bold">Tham gia Gia phả họ Lê</CardTitle>
+                <CardTitle className="text-2xl font-bold">Tham gia Gia phả họ Hồ</CardTitle>
                 <CardDescription>Đăng ký tham gia nền tảng gia phả dòng họ</CardDescription>
             </CardHeader>
             <CardContent>
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                    {!inviteCode && (
-                        <div className="rounded-md bg-amber-500/10 p-3 text-sm text-amber-600 dark:text-amber-400">
-                            ⚠️ Bạn cần có mã mời từ Admin để đăng ký
-                        </div>
-                    )}
-
                     {error && (
                         <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</div>
                     )}
 
                     <div className="space-y-2">
                         <label className="text-sm font-medium" htmlFor="displayName">Tên hiển thị</label>
-                        <Input id="displayName" placeholder="Nguyễn Văn A" {...register('displayName')} />
+                        <Input id="displayName" placeholder="Hồ Văn A" {...register('displayName')} />
                         {errors.displayName && <p className="text-xs text-destructive">{errors.displayName.message}</p>}
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium" htmlFor="inviteCode">Mã mời <span className="text-muted-foreground">(tùy chọn)</span></label>
+                        <Input id="inviteCode" placeholder="FAMILY2026" {...register('inviteCode')} />
+                        {errors.inviteCode && <p className="text-xs text-destructive">{errors.inviteCode.message}</p>}
+                        <p className="text-xs text-muted-foreground">Để trống nếu không có mã mời. Mã mẫu: <code>FAMILY2026</code></p>
                     </div>
 
                     <div className="space-y-2">
@@ -172,7 +174,7 @@ function RegisterContent() {
                         {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword.message}</p>}
                     </div>
 
-                    <Button type="submit" className="w-full" disabled={loading || !inviteCode}>
+                    <Button type="submit" className="w-full" disabled={loading}>
                         {loading ? 'Đang đăng ký...' : 'Đăng ký'}
                     </Button>
                 </form>
@@ -182,9 +184,5 @@ function RegisterContent() {
 }
 
 export default function RegisterPage() {
-    return (
-        <Suspense fallback={<div className="flex items-center justify-center h-48"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" /></div>}>
-            <RegisterContent />
-        </Suspense>
-    );
+    return <RegisterContent />;
 }
