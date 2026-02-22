@@ -200,14 +200,14 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         displayName: 'Lê Bá Năng', surname: 'Lê', firstName: 'Bá Năng',
         generation: 7,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: [], parentFamilies: ['F011']
+        families: ['F015'], parentFamilies: ['F011']
     },
     {
         handle: 'P019', gramps_id: 'I0019', gender: 1,
         displayName: 'Lê Bá Đằng', surname: 'Lê', firstName: 'Bá Đằng',
         generation: 7,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: ['F015'], parentFamilies: ['F011']
+        families: [], parentFamilies: ['F011']
     },
     {
         handle: 'P020', gramps_id: 'I0020', gender: 1,
@@ -354,7 +354,7 @@ export const MOCK_PEOPLE: PersonDetail[] = [
         displayName: 'Lê Huy Toản', surname: 'Lê', firstName: 'Huy Toản',
         generation: 10, chi: 1,
         isLiving: true, isPrivacyFiltered: false, isPatrilineal: true,
-        families: ['F051'], parentFamilies: ['F025']
+        families: ['F051'], parentFamilies: ['F026']
     },
     {
         handle: 'P041', gramps_id: 'I0041', gender: 1,
@@ -2631,7 +2631,7 @@ export const MOCK_FAMILIES: TreeFamily[] = [
         children: ['P022']
     },
     {
-        handle: 'F015', fatherHandle: 'P019',
+        handle: 'F015', fatherHandle: 'P018',
         children: ['P023']
     },
     {
@@ -2672,11 +2672,11 @@ export const MOCK_FAMILIES: TreeFamily[] = [
     },
     {
         handle: 'F025', fatherHandle: 'P029',
-        children: ['P040']
+        children: []
     },
     {
         handle: 'F026', fatherHandle: 'P030',
-        children: ['P041']
+        children: ['P040', 'P041']
     },
     {
         handle: 'F027', fatherHandle: 'P031',
