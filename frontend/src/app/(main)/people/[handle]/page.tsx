@@ -24,22 +24,19 @@ export default function PersonProfilePage() {
     useEffect(() => {
         const fetchPerson = async () => {
             try {
-                const token = localStorage.getItem('accessToken');
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-                if (token && apiUrl) {
-                    const res = await fetch(`${apiUrl}/genealogy/people/${handle}`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                        signal: AbortSignal.timeout(3000),
-                    });
-                    if (res.ok) {
-                        const json = await res.json();
-                        setPerson(json.data);
-                        setLoading(false);
-                        return;
-                    }
+                const { supabase } = await import('@/lib/supabase');
+                const { data, error } = await supabase
+                    .from('people')
+                    .select('*')
+                    .eq('handle', handle)
+                    .single();
+                if (!error && data) {
+                    setPerson(data as PersonDetail);
+                    setLoading(false);
+                    return;
                 }
             } catch {
-                // API unavailable
+                // Supabase unavailable
             }
             // Fallback to mock data
             const mockPerson = MOCK_PEOPLE.find((p) => p.handle === handle) || null;

@@ -39,22 +39,20 @@ export default function PeopleListPage() {
     useEffect(() => {
         const fetchPeople = async () => {
             try {
-                const token = localStorage.getItem('accessToken');
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-                if (token && apiUrl) {
-                    const res = await fetch(`${apiUrl}/genealogy/people`, {
-                        headers: { Authorization: `Bearer ${token}` },
-                        signal: AbortSignal.timeout(3000),
-                    });
-                    if (res.ok) {
-                        const json = await res.json();
-                        setPeople(json.data);
-                        setLoading(false);
-                        return;
-                    }
+                // Fetch from Supabase people table
+                const { createClient } = await import('@supabase/supabase-js');
+                const { supabase } = await import('@/lib/supabase');
+                const { data, error } = await supabase
+                    .from('people')
+                    .select('handle, displayName, gender, birthYear, deathYear, isLiving, isPrivacyFiltered')
+                    .order('displayName', { ascending: true });
+                if (!error && data && data.length > 0) {
+                    setPeople(data);
+                    setLoading(false);
+                    return;
                 }
             } catch {
-                // API unavailable
+                // Supabase unavailable
             }
             // Fallback to mock data
             setPeople(MOCK_PEOPLE);

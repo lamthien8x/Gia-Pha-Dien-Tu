@@ -1,75 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Database, Download, Plus, Clock } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { Database, Download, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-
-interface BackupRecord {
-    id: string;
-    type: string;
-    fileName: string;
-    fileSize: number;
-    status: string;
-    createdAt: string;
-    completedAt?: string;
-}
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/components/auth-provider';
 
 export default function BackupPage() {
-    const [backups, setBackups] = useState<BackupRecord[]>([]);
-    const [loading, setLoading] = useState(true);
+    const { isAdmin } = useAuth();
     const [creating, setCreating] = useState(false);
-
-    const fetchBackups = async () => {
-        try {
-            const token = localStorage.getItem('accessToken');
-            const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/backup`, {
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            if (!res.ok) throw new Error('Failed');
-            const json = await res.json();
-            setBackups(json.data || []);
-        } catch {
-            setBackups([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    useEffect(() => { fetchBackups(); }, []);
+    const [lastBackup, setLastBackup] = useState<string | null>(null);
 
     const createBackup = async () => {
+        setCreating(true);
         try {
-            setCreating(true);
-            const token = localStorage.getItem('accessToken');
-            await fetch(`${process.env.NEXT_PUBLIC_API_URL}/backup`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${token}` },
-            });
-            fetchBackups();
+            // Export all data from Supabase
+            const { data: people } = await supabase.from('people').select('*');
+            const { data: families } = await supabase.from('families').select('*');
+            const { data: profiles } = await supabase.from('profiles').select('*');
+
+            const backup = {
+                exported_at: new Date().toISOString(),
+                people: people || [],
+                families: families || [],
+                profiles: profiles || [],
+            };
+
+            // Download as JSON
+            const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `giapha-backup-${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            setLastBackup(new Date().toISOString());
         } finally {
             setCreating(false);
         }
-    };
-
-    const downloadBackup = (id: string) => {
-        const token = localStorage.getItem('accessToken');
-        window.open(`${process.env.NEXT_PUBLIC_API_URL}/backup/${id}/download?token=${token}`, '_blank');
-    };
-
-    const formatSize = (bytes: number) => {
-        if (bytes < 1024) return `${bytes} B`;
-        if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-        return `${(bytes / 1048576).toFixed(1)} MB`;
     };
 
     return (
@@ -83,65 +54,56 @@ export default function BackupPage() {
                     <p className="text-muted-foreground">Quản lý sao lưu cơ sở dữ liệu</p>
                 </div>
                 <Button onClick={createBackup} disabled={creating}>
-                    <Plus className="mr-2 h-4 w-4" />
-                    {creating ? 'Đang tạo...' : 'Tạo backup mới'}
+                    <Download className="mr-2 h-4 w-4" />
+                    {creating ? 'Đang xuất...' : 'Xuất backup JSON'}
                 </Button>
             </div>
 
             <Card>
                 <CardHeader>
-                    <CardTitle className="text-base">Lịch sử sao lưu</CardTitle>
+                    <CardTitle className="text-base">Thông tin database</CardTitle>
                 </CardHeader>
-                <CardContent className="p-0">
-                    {loading ? (
-                        <div className="flex items-center justify-center h-48">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
-                        </div>
-                    ) : (
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead>Tên file</TableHead>
-                                    <TableHead>Loại</TableHead>
-                                    <TableHead>Kích thước</TableHead>
-                                    <TableHead>Trạng thái</TableHead>
-                                    <TableHead>Thời gian</TableHead>
-                                    <TableHead className="w-12"></TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {backups.map((b) => (
-                                    <TableRow key={b.id}>
-                                        <TableCell className="font-mono text-xs">{b.fileName}</TableCell>
-                                        <TableCell>
-                                            <Badge variant="outline">{b.type}</Badge>
-                                        </TableCell>
-                                        <TableCell>{formatSize(b.fileSize)}</TableCell>
-                                        <TableCell>
-                                            <Badge variant={b.status === 'COMPLETED' ? 'default' : 'secondary'}>
-                                                {b.status === 'COMPLETED' ? 'Hoàn tất' : b.status}
-                                            </Badge>
-                                        </TableCell>
-                                        <TableCell className="text-xs">{new Date(b.createdAt).toLocaleString('vi-VN')}</TableCell>
-                                        <TableCell>
-                                            <Button variant="ghost" size="icon" onClick={() => downloadBackup(b.id)}>
-                                                <Download className="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {backups.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                                            Chưa có bản sao lưu nào
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
+                <CardContent className="space-y-3">
+                    <DatabaseStats />
+                    {lastBackup && (
+                        <p className="text-sm text-muted-foreground">
+                            Backup gần nhất: {new Date(lastBackup).toLocaleString('vi-VN')}
+                        </p>
                     )}
                 </CardContent>
             </Card>
+        </div>
+    );
+}
+
+function DatabaseStats() {
+    const [stats, setStats] = useState<Record<string, number>>({});
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function load() {
+            const tables = ['people', 'families', 'profiles', 'posts', 'comments', 'events', 'notifications'];
+            const counts: Record<string, number> = {};
+            for (const t of tables) {
+                const { count } = await supabase.from(t).select('*', { count: 'exact', head: true });
+                counts[t] = count || 0;
+            }
+            setStats(counts);
+            setLoading(false);
+        }
+        load();
+    }, []);
+
+    if (loading) return <div className="animate-pulse text-sm text-muted-foreground">Đang tải...</div>;
+
+    return (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Object.entries(stats).map(([table, count]) => (
+                <div key={table} className="rounded-lg border p-3 text-center">
+                    <p className="text-2xl font-bold">{count}</p>
+                    <p className="text-xs text-muted-foreground">{table}</p>
+                </div>
+            ))}
         </div>
     );
 }
