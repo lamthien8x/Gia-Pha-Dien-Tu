@@ -28,8 +28,8 @@ type ViewMode = 'full' | 'ancestor' | 'descendant';
 type ZoomLevel = 'full' | 'compact' | 'mini';
 
 function getZoomLevel(scale: number): ZoomLevel {
-    if (scale > 0.6) return 'full';
-    if (scale > 0.3) return 'compact';
+    if (scale > 0.45) return 'full';
+    if (scale > 0.15) return 'compact';
     return 'mini';
 }
 
@@ -952,11 +952,12 @@ export default function TreeViewPage() {
                             {visibleNodes.map(item => (
                                 <MemoPersonCard key={item.node.handle} item={item}
                                     isHighlighted={highlightHandles.has(item.node.handle)}
-                                    isFocused={focusPerson === item.node.handle}
-                                    isHovered={hoveredHandle === item.node.handle}
-                                    isSelected={editorMode && selectedCard === item.node.handle}
+                                    isFocused={item.node.handle === focusPerson}
+                                    isHovered={item.node.handle === hoveredHandle}
+                                    isSelected={item.node.handle === selectedCard}
                                     zoomLevel={zoomLevel}
-                                    showCollapseToggle={hasChildren(item.node.handle)}
+                                    scale={transform.scale}
+                                    showCollapseToggle={viewMode === 'full' && hasChildren(item.node.handle)}
                                     isCollapsed={collapsedBranches.has(item.node.handle)}
                                     onHover={handleCardHover}
                                     onClick={handleCardClick}
@@ -1212,13 +1213,14 @@ const MemoPersonCard = memo(PersonCard, (prev, next) =>
     prev.isCollapsed === next.isCollapsed
 );
 
-function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoomLevel, showCollapseToggle, isCollapsed, onHover, onClick, onSetFocus, onToggleCollapse }: {
+function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoomLevel, scale, showCollapseToggle, isCollapsed, onHover, onClick, onSetFocus, onToggleCollapse }: {
     item: PositionedNode;
     isHighlighted: boolean;
     isFocused: boolean;
     isHovered: boolean;
     isSelected: boolean;
     zoomLevel: ZoomLevel;
+    scale: number;
     showCollapseToggle: boolean;
     isCollapsed: boolean;
     onHover: (h: string | null) => void;
@@ -1288,32 +1290,36 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
 
     // F1: COMPACT zoom → smaller card with just name + gen
     if (zoomLevel === 'compact') {
+        const isExtraSmall = scale <= 0.25;
+
         return (
             <div
-                className={`absolute rounded-lg border bg-gradient-to-br shadow-sm transition-all duration-200
-                    cursor-pointer hover:shadow-md ${bgClass} ${glowClass}
+                className={`absolute rounded-xl border bg-gradient-to-br shadow-sm transition-all duration-200
+                    cursor-pointer hover:shadow-md ${bgClass} ${glowClass} flex flex-col items-center justify-center p-2
                     ${isDead ? 'opacity-70' : ''} ${!isPatri ? 'opacity-80' : ''}`}
                 style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
                 onMouseEnter={() => onHover(node.handle)}
                 onMouseLeave={() => onHover(null)}
                 onClick={(e) => { e.stopPropagation(); onClick(node.handle, x + CARD_W, y + CARD_H / 2); }}
             >
-                <div className="px-2 py-1.5 h-full flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center overflow-hidden
-                        font-bold text-[9px] shadow-sm ring-1 ring-black/5 ${avatarBg} flex-shrink-0`}>
-                        {node.avatarUrl ? (
-                            <img src={node.avatarUrl} alt={node.displayName} className="w-full h-full object-cover" />
-                        ) : (
-                            initials
-                        )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-[10px] leading-tight text-slate-800 truncate">{node.displayName}</p>
-                        <span className="text-[8px] font-semibold px-0.5 py-px rounded bg-amber-100 text-amber-700">Đời {item.generation + 1}</span>
-                    </div>
+                <div className={`rounded-full flex items-center justify-center overflow-hidden
+                    font-bold shadow-sm ring-1 ring-black/5 ${avatarBg} flex-shrink-0 transition-all
+                    ${isExtraSmall ? 'w-8 h-8 text-[10px]' : 'w-10 h-10 text-[12px] mb-1'}`}>
+                    {node.avatarUrl ? (
+                        <img src={node.avatarUrl} alt={node.displayName} className="w-full h-full object-cover" />
+                    ) : (
+                        initials
+                    )}
                 </div>
+                <div className="w-full text-center px-1">
+                    <p className={`font-bold leading-tight text-slate-800 line-clamp-2 transition-all
+                        ${isExtraSmall ? 'text-[10px]' : 'text-[13px] '}`}>
+                        {node.displayName}
+                    </p>
+                </div>
+
                 {/* Collapse toggle */}
-                {showCollapseToggle && (
+                {showCollapseToggle && !isExtraSmall && (
                     <button
                         className="absolute -bottom-2.5 left-1/2 -translate-x-1/2 z-10 w-5 h-5 rounded-full
                             bg-white border border-slate-300 shadow-sm flex items-center justify-center
@@ -1339,10 +1345,10 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
             onClick={(e) => { e.stopPropagation(); onClick(node.handle, x + CARD_W, y + CARD_H / 2); }}
             onContextMenu={(e) => { e.preventDefault(); onSetFocus(node.handle); }}
         >
-            <div className="px-2.5 py-2 h-full flex items-center gap-2.5">
+            <div className="px-3 py-2 h-full flex items-center gap-3">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                    <div className={`w-11 h-11 rounded-full flex items-center justify-center overflow-hidden
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center overflow-hidden
                         font-bold text-sm shadow-sm ring-1 ring-black/5 ${avatarBg} ${isDead ? 'opacity-60' : ''}`}>
                         {node.avatarUrl ? (
                             <img src={node.avatarUrl} alt={node.displayName} className="w-full h-full object-cover" />
@@ -1358,23 +1364,22 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-[11px] leading-tight text-slate-800 truncate">
+                    <p className="font-bold text-[13px] leading-tight text-slate-800 line-clamp-2">
                         {node.displayName}
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-0.5">
+                    <p className="text-[11px] text-slate-500 mt-1">
                         {node.birthYear
                             ? `${node.birthYear}${node.deathYear ? ` — ${node.deathYear}` : node.isLiving ? ' — nay' : ''}`
                             : '—'}
                     </p>
-                    <div className="mt-0.5 flex items-center gap-1">
-                        <span className="text-[9px] font-semibold px-1 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200/60">Đời {item.generation + 1}</span>
+                    <div className="mt-1 flex items-center gap-1.5">
                         {isDead ? (
-                            <span className="text-[9px] text-slate-400">✝ Đã mất</span>
+                            <span className="text-[10px] text-slate-400">✝ Đã mất</span>
                         ) : (
-                            <span className="text-[9px] text-emerald-600 font-medium">● Còn sống</span>
+                            <span className="text-[10px] text-emerald-600 font-medium">● Còn sống</span>
                         )}
                         {!isPatri && (
-                            <span className="text-[9px] text-slate-400 ml-0.5">· Ngoại tộc</span>
+                            <span className="text-[10px] text-slate-400">· Ngoại tộc</span>
                         )}
                     </div>
                 </div>
@@ -1480,13 +1485,16 @@ function GenerationHeaders({ generationStats, transform, cardH }: {
                             height: 28,
                         }}
                     >
-                        <div className="bg-slate-800/85 hover:bg-slate-800 backdrop-blur-md text-white pl-2.5 pr-3 py-1 rounded-r-lg
+                        <div className="bg-slate-800/85 hover:bg-slate-800 backdrop-blur-md text-white pl-1.5 pr-2 py-0.5 sm:pl-2.5 sm:pr-3 sm:py-1 rounded-r-md sm:rounded-r-lg
                             font-medium whitespace-nowrap shadow-md border-y border-r border-slate-700/50 
-                            flex items-center gap-2 transition-all cursor-default relative overflow-hidden">
+                            flex items-center gap-1 sm:gap-2 transition-all cursor-default relative overflow-hidden">
                             <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                            <span className="text-[11px] font-semibold tracking-wide">Đời {gen}</span>
-                            <div className="w-1 h-1 rounded-full bg-slate-500/80" />
-                            <span className="text-[11px] text-slate-300 font-medium">{count} người</span>
+                            <span className="text-[9px] sm:text-[11px] font-semibold tracking-wide">
+                                <span className="sm:hidden">Đ{gen}</span>
+                                <span className="hidden sm:inline">Đời {gen}</span>
+                            </span>
+                            <div className="w-0.5 h-0.5 sm:w-1 sm:h-1 rounded-full bg-slate-500/80" />
+                            <span className="text-[9px] sm:text-[11px] text-slate-300 font-medium">{count} <span className="hidden sm:inline">người</span></span>
                         </div>
                     </div>
                 );

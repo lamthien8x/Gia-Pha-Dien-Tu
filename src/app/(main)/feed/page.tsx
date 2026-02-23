@@ -100,40 +100,40 @@ function PostComposer({ onPostCreated }: { onPostCreated: () => void }) {
     if (!isLoggedIn) return null;
 
     return (
-        <Card className="border shadow-sm overflow-hidden">
+        <Card className="border-border shadow-sm overflow-visible bg-card">
             <CardContent className="p-4 sm:p-5 flex gap-3">
-                <Avatar className="h-10 w-10">
-                    <AvatarFallback className="bg-primary/10 text-primary">
+                <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarFallback className="bg-primary/10 text-primary font-medium">
                         {getInitials(user?.user_metadata?.display_name, user?.email)}
                     </AvatarFallback>
                 </Avatar>
                 <div className="flex-1 space-y-3">
                     {!expanded ? (
                         <div
-                            className="bg-muted hover:bg-muted/80 transition-colors w-full rounded-full py-2.5 px-4 text-muted-foreground text-sm cursor-text flex items-center"
+                            className="bg-muted/50 hover:bg-muted/80 transition-colors w-full rounded-2xl py-2.5 px-4 text-muted-foreground text-[15px] cursor-text flex items-center border border-transparent hover:border-border"
                             onClick={() => setExpanded(true)}
                         >
                             Bạn muốn chia sẻ điều gì với dòng họ?
                         </div>
                     ) : (
-                        <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <div className="space-y-3 animate-in fade-in zoom-in-95 duration-200 origin-top">
                             <Textarea
                                 placeholder="Bạn muốn chia sẻ điều gì với dòng họ?"
                                 value={body}
                                 onChange={(e) => setBody(e.target.value)}
-                                className="min-h-[100px] text-base resize-none focus-visible:ring-1 border-muted"
+                                className="min-h-[100px] text-[15px] resize-none focus-visible:ring-1 border-input bg-transparent"
                                 autoFocus
                             />
-                            <div className="flex items-center justify-between pt-2">
-                                <Button variant="ghost" size="sm" className="text-muted-foreground rounded-full h-8 px-3">
+                            <div className="flex items-center justify-between pt-1">
+                                <Button variant="ghost" size="sm" className="text-muted-foreground rounded-full h-8 px-3 hover:bg-muted">
                                     <ImageIcon className="w-4 h-4 mr-2" />
                                     Ảnh/Video
                                 </Button>
                                 <div className="flex items-center gap-2">
-                                    <Button variant="ghost" size="sm" onClick={() => setExpanded(false)} className="rounded-full">
+                                    <Button variant="ghost" size="sm" onClick={() => setExpanded(false)} className="rounded-full hover:bg-muted">
                                         Hủy
                                     </Button>
-                                    <Button size="sm" onClick={handleSubmit} disabled={!body.trim() || submitting} className="rounded-full px-5 shadow-sm">
+                                    <Button size="sm" onClick={handleSubmit} disabled={!body.trim() || submitting} className="rounded-full px-5 shadow-none transition-transform active:scale-95">
                                         {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
                                         Đăng bài
                                     </Button>
@@ -175,27 +175,27 @@ function CommentSection({ postId }: { postId: string }) {
     };
 
     return (
-        <div className="border-t bg-muted/20 px-4 py-3 sm:px-5 sm:py-4 space-y-4">
+        <div className="border-t border-border/50 bg-muted/10 px-4 py-3 sm:px-5 sm:py-4 space-y-4 transition-all">
             {loading ? (
-                <div className="flex justify-center p-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                <div className="flex justify-center p-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                 </div>
             ) : comments.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-5">
                     {comments.map((c) => (
-                        <div key={c.id} className="flex gap-2.5">
-                            <Avatar className="h-8 w-8 shrink-0 mt-0.5">
-                                <AvatarFallback className="text-xs bg-secondary">
+                        <div key={c.id} className="flex gap-3">
+                            <Avatar className="h-8 w-8 shrink-0 mt-0.5 border border-border/50">
+                                <AvatarFallback className="text-[10px] bg-secondary font-medium">
                                     {getInitials(c.author?.display_name, c.author?.email)}
                                 </AvatarFallback>
                             </Avatar>
                             <div className="flex-1 space-y-1">
-                                <div className="bg-muted/50 rounded-2xl px-3.5 py-2 inline-block">
-                                    <p className="text-sm font-semibold">{c.author?.display_name || c.author?.email?.split('@')[0]}</p>
-                                    <p className="text-sm">{c.body}</p>
+                                <div className="bg-muted/40 rounded-2xl px-4 py-2.5 inline-block text-[14px]">
+                                    <p className="font-semibold mb-0.5">{c.author?.display_name || c.author?.email?.split('@')[0]}</p>
+                                    <p className="text-foreground/90 whitespace-pre-wrap break-words leading-snug">{c.body}</p>
                                 </div>
                                 <div className="px-3">
-                                    <span className="text-xs text-muted-foreground font-medium">
+                                    <span className="text-[11px] text-muted-foreground">
                                         {formatRelativeTime(c.created_at)}
                                     </span>
                                 </div>
@@ -204,34 +204,37 @@ function CommentSection({ postId }: { postId: string }) {
                     ))}
                 </div>
             ) : (
-                <div className="text-center py-2 text-sm text-muted-foreground pb-2">
+                <div className="text-center py-4 text-[14px] text-muted-foreground">
                     Chưa có bình luận nào. Hãy là người đầu tiên bình luận!
                 </div>
             )}
 
             {isLoggedIn && (
-                <div className="flex gap-2.5 pt-1">
+                <div className="flex gap-3 pt-2">
                     <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="text-xs bg-primary/10 text-primary">
+                        <AvatarFallback className="text-[10px] bg-primary/10 text-primary font-medium">
                             {getInitials(user?.user_metadata?.display_name, user?.email)}
                         </AvatarFallback>
                     </Avatar>
-                    <div className="flex-1 relative">
+                    <div className="flex-1 relative flex items-center">
                         <Input
                             placeholder="Viết bình luận..."
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
-                            className="bg-background rounded-full pr-10 hover:bg-background/90 transition-colors"
+                            className="bg-transparent border-border rounded-full pr-11 text-[14px]"
                         />
                         <Button
                             size="icon"
                             variant="ghost"
                             onClick={handleSubmit}
                             disabled={!newComment.trim() || submitting}
-                            className="absolute right-1 top-1 h-7 w-7 rounded-full text-primary hover:bg-primary/10"
+                            className={cn(
+                                "absolute right-1 w-8 h-8 rounded-full transition-colors",
+                                newComment.trim() ? "text-primary hover:bg-primary/10" : "text-muted-foreground"
+                            )}
                         >
-                            {submitting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3.5 w-3.5" />}
+                            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4 ml-0.5" />}
                         </Button>
                     </div>
                 </div>
@@ -258,34 +261,34 @@ function PostCard({ post, onRefresh }: { post: Post; onRefresh: () => void }) {
 
     return (
         <Card className={cn(
-            "transition-all duration-200 overflow-hidden",
-            post.is_pinned ? "border-primary/40 shadow-sm ring-1 ring-primary/10" : "shadow-sm hover:shadow-md"
+            "transition-all duration-200 overflow-hidden border bg-card",
+            post.is_pinned ? "ring-2 ring-primary/20 shadow-sm" : "shadow-sm hover:shadow-md"
         )}>
             {post.is_pinned && (
-                <div className="bg-primary/5 px-4 py-1.5 border-b border-primary/10 flex items-center gap-1.5 text-xs font-medium text-primary">
+                <div className="bg-primary/5 px-4 py-2 border-b border-primary/10 flex items-center gap-1.5 text-[13px] font-semibold text-primary">
                     <Pin className="h-3.5 w-3.5" />
                     Bài viết đã ghim
                 </div>
             )}
 
-            <CardHeader className="p-4 sm:p-5 pb-3">
+            <CardHeader className="p-4 sm:p-5 pb-2">
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3">
-                        <Avatar className="h-10 w-10 border border-muted">
-                            <AvatarFallback className="bg-secondary text-secondary-foreground">
+                        <Avatar className="h-11 w-11 border border-border">
+                            <AvatarFallback className="bg-secondary text-secondary-foreground font-medium">
                                 {getInitials(post.author?.display_name, post.author?.email)}
                             </AvatarFallback>
                         </Avatar>
-                        <div>
-                            <p className="font-semibold text-sm leading-tight text-foreground hover:underline cursor-pointer">
+                        <div className="flex flex-col">
+                            <span className="font-semibold text-[15px] leading-tight text-foreground hover:underline cursor-pointer tracking-tight">
                                 {post.author?.display_name || post.author?.email?.split('@')[0] || 'Ẩn danh'}
-                            </p>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground font-medium">
+                            </span>
+                            <div className="flex items-center gap-1.5 mt-1 text-[13px] text-muted-foreground">
                                 <span>{formatRelativeTime(post.created_at)}</span>
                                 {post.type === 'announcement' && (
                                     <>
-                                        <span>•</span>
-                                        <Badge variant="outline" className="h-4 px-1.5 text-[10px] uppercase font-semibold border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-400">
+                                        <span className="text-[10px] opacity-50">•</span>
+                                        <Badge variant="secondary" className="px-1.5 text-[10px] uppercase font-bold tracking-wider rounded-md bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                                             Thông báo
                                         </Badge>
                                     </>
@@ -297,20 +300,20 @@ function PostCard({ post, onRefresh }: { post: Post; onRefresh: () => void }) {
                     {(isAdmin || isAuthor) && (
                         <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground hover:bg-muted focus-visible:ring-0">
                                     <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuContent align="end" className="w-48 shadow-lg">
                                 {isAdmin && (
-                                    <DropdownMenuItem onClick={handleTogglePin}>
-                                        <Pin className="h-4 w-4 mr-2" />
-                                        {post.is_pinned ? 'Bỏ ghim bài viết' : 'Ghim bài viết'}
+                                    <DropdownMenuItem onClick={handleTogglePin} className="py-2.5">
+                                        <Pin className="h-4 w-4 mr-2.5 text-muted-foreground" />
+                                        <span>{post.is_pinned ? 'Bỏ ghim bài viết' : 'Ghim bài viết'}</span>
                                     </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem onClick={handleDelete} className="text-destructive focus:bg-destructive/10 focus:text-destructive">
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Xóa bài viết
+                                <DropdownMenuItem onClick={handleDelete} className="py-2.5 text-destructive focus:bg-destructive/10 focus:text-destructive">
+                                    <Trash2 className="h-4 w-4 mr-2.5" />
+                                    <span>Xóa bài viết</span>
                                 </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
@@ -318,30 +321,30 @@ function PostCard({ post, onRefresh }: { post: Post; onRefresh: () => void }) {
                 </div>
             </CardHeader>
 
-            <CardContent className="p-4 sm:p-5 pt-0 space-y-4">
-                {post.title && <h3 className="font-bold text-lg leading-tight">{post.title}</h3>}
-                <div className="text-sm sm:text-base leading-relaxed whitespace-pre-wrap break-words">
+            <CardContent className="p-4 sm:p-5 pt-2 space-y-3">
+                {post.title && <h3 className="font-bold text-lg sm:text-xl leading-snug tracking-tight text-foreground">{post.title}</h3>}
+                <div className="text-[15px] sm:text-[16px] leading-relaxed whitespace-pre-wrap break-words text-foreground/90">
                     {post.body}
                 </div>
             </CardContent>
 
-            <div className="px-4 py-3 sm:px-5 border-t border-muted/50 flex items-center gap-4 text-muted-foreground">
+            <div className="px-3 py-1.5 sm:px-4 sm:py-2 border-t border-border flex items-center justify-start gap-4">
                 <Button
                     variant="ghost"
                     size="sm"
                     className={cn(
-                        "rounded-full px-4 h-9 flex-1 sm:flex-none justify-center gap-2 hover:bg-muted font-medium transition-colors",
+                        "rounded-lg px-3 h-9 flex items-center gap-2 font-medium transition-colors hover:bg-muted text-muted-foreground",
                         showComments && "bg-muted text-foreground"
                     )}
                     onClick={() => setShowComments(!showComments)}
                 >
                     <MessageCircle className="h-4 w-4" />
-                    Bình luận {post.comment_count ? `(${post.comment_count})` : ''}
+                    <span>Bình luận {post.comment_count ? <span className="opacity-70 ml-1">({post.comment_count})</span> : ''}</span>
                 </Button>
             </div>
 
             {showComments && (
-                <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="animate-in fade-in zoom-in-95 duration-200 origin-top">
                     <CommentSection postId={post.id} />
                 </div>
             )}

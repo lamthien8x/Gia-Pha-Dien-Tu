@@ -14,7 +14,6 @@ import {
     ChevronRight,
     BookOpen,
     ClipboardCheck,
-    Contact,
     Newspaper,
     CalendarDays,
     Menu,
