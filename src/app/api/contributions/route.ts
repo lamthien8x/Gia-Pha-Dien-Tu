@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { notifyNewContribution } from '@/lib/telegram';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +32,25 @@ export async function POST(request: NextRequest) {
                 { error: `Insert failed: ${insertError.message}` },
                 { status: 500 }
             );
+        }
+
+        // Gửi thông báo Telegram kèm nút Duyệt/Từ chối (fire-and-forget)
+        if (rows.length > 0) {
+            const first = rows[0];
+            const batchTs = String(Date.now()); // timestamp to identify this batch
+
+            notifyNewContribution({
+                person_handle: first.person_handle,
+                person_name: first.person_name,
+                fields: rows.map((r: Record<string, string>) => ({
+                    label: r.field_label || r.field_name,
+                    old_value: r.old_value,
+                    new_value: r.new_value,
+                })),
+                author_email: first.author_email,
+                note: first.note,
+                batch_ts: batchTs,
+            }).catch(() => { }); // swallow errors
         }
 
         return NextResponse.json({ success: true });
