@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { CalendarDays, MapPin, Clock, Users, ArrowLeft, Check, X, HelpCircle, Loader2 } from 'lucide-react';
+import { CalendarDays, MapPin, Clock, Users, ArrowLeft, Check, X, HelpCircle, Loader2, Image as ImageIcon, FileText, FileVideo, Eye } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
+import { mediaApi } from '@/lib/api';
 
 const typeLabels: Record<string, { label: string; emoji: string }> = {
     MEMORIAL: { label: 'Giỗ', emoji: '🕯️' },
@@ -30,6 +31,10 @@ export default function EventDetailPage() {
     const [rsvps, setRsvps] = useState<Record<string, unknown>[]>([]);
     const [myRsvp, setMyRsvp] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // Media data
+    const [eventMedia, setEventMedia] = useState<any[]>([]);
+    const [mediaLoading, setMediaLoading] = useState(true);
 
     const fetchEvent = useCallback(async () => {
         if (!params.id) return;
@@ -59,6 +64,17 @@ export default function EventDetailPage() {
     }, [params.id, user]);
 
     useEffect(() => { fetchEvent(); }, [fetchEvent]);
+
+    useEffect(() => {
+        if (!params.id) return;
+        const fetchEventMedia = async () => {
+            setMediaLoading(true);
+            const res = await mediaApi.listByEvent(params.id as string);
+            if (res.data) setEventMedia(res.data);
+            setMediaLoading(false);
+        };
+        fetchEventMedia();
+    }, [params.id]);
 
     const handleRsvp = async (status: string) => {
         if (!user || !params.id) return;
@@ -127,6 +143,45 @@ export default function EventDetailPage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* Event Media */}
+            <Card>
+                <CardHeader><CardTitle className="text-base">Tư liệu sự kiện</CardTitle></CardHeader>
+                <CardContent>
+                    {mediaLoading ? (
+                        <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+                    ) : eventMedia.length === 0 ? (
+                        <div className="text-center py-8">
+                            <ImageIcon className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
+                            <p className="text-muted-foreground text-sm">Chưa có tư liệu nào</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                            {eventMedia.map(item => {
+                                const publicUrl = item.uploader_id && supabase.storage.from('media').getPublicUrl(`${item.uploader_id}/${item.file_name}`).data.publicUrl;
+                                const isImage = item.mime_type?.startsWith('image/');
+                                return (
+                                    <div key={item.id} className="group relative rounded-lg border overflow-hidden aspect-square flex items-center justify-center bg-muted">
+                                        {isImage && publicUrl ? (
+                                            <>
+                                                <img src={publicUrl} alt={item.title || item.file_name} className="w-full h-full object-cover" />
+                                                <a href={publicUrl} target="_blank" rel="noopener noreferrer" className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                                    <Eye className="text-white w-6 h-6" />
+                                                </a>
+                                            </>
+                                        ) : (
+                                            <a href={publicUrl || '#'} target="_blank" rel="noopener noreferrer" className="w-full h-full flex flex-col items-center justify-center p-4 hover:bg-black/5 transition-colors">
+                                                {item.mime_type?.startsWith('video/') ? <FileVideo className="w-8 h-8 text-purple-500 mb-2" /> : <FileText className="w-8 h-8 text-gray-500 mb-2" />}
+                                                <span className="text-xs text-center truncate w-full px-2">{item.title || item.file_name}</span>
+                                            </a>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
         </div>
     );
 }

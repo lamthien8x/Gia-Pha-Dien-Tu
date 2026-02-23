@@ -8,7 +8,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
 const getAdminClient = () => createClient(supabaseUrl, supabaseServiceKey);
 
-// PATCH - Duyệt/Từ chối media
+// PATCH - Duyệt/Từ chối hoặc Cập nhật tags media
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> | { id: string } }
@@ -16,30 +16,45 @@ export async function PATCH(
     try {
         const params = await context.params;
         const body = await request.json();
-        const { action } = body; // 'approve' or 'reject'
+        const { action, tagged_people, tagged_events } = body;
 
-        if (action !== 'approve' && action !== 'reject') {
-            return NextResponse.json(
-                { error: 'Invalid action' },
-                { status: 400 }
-            );
+        if (action === 'approve' || action === 'reject') {
+            const newState = action === 'approve' ? 'PUBLISHED' : 'REJECTED';
+            const { data, error } = await getAdminClient()
+                .from('media')
+                .update({ state: newState })
+                .eq('id', params.id)
+                .select()
+                .single();
+            if (error) throw error;
+            return NextResponse.json({ data });
         }
 
-        const newState = action === 'approve' ? 'PUBLISHED' : 'REJECTED';
+        if (action === 'update_tags') {
+            const updateData: any = {};
+            if (tagged_people !== undefined) updateData.tagged_people = tagged_people;
+            if (tagged_events !== undefined) updateData.tagged_events = tagged_events;
 
-        const { data, error } = await getAdminClient()
-            .from('media')
-            .update({ state: newState })
-            .eq('id', params.id)
-            .select()
-            .single();
+            const { data, error } = await getAdminClient()
+                .from('media')
+                .update(updateData)
+                .eq('id', params.id)
+                .select()
+                .single();
+            if (error) {
+                console.error("Supabase update error:", error);
+                throw error;
+            }
+            return NextResponse.json({ data });
+        }
 
-        if (error) throw error;
-
-        return NextResponse.json({ data });
-    } catch (error: unknown) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        return NextResponse.json({ error: message }, { status: 500 });
+        return NextResponse.json(
+            { error: 'Invalid action' },
+            { status: 400 }
+        );
+    } catch (error: any) {
+        console.error("API error in PATCH /api/media/[id]:", error);
+        return NextResponse.json({ error: error?.message || 'Unknown error', details: error }, { status: 500 });
     }
 }
 

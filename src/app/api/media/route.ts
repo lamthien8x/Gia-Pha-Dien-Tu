@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const state = searchParams.get('state');
+        const person = searchParams.get('person');
+        const event = searchParams.get('event');
 
         let query = getAdminClient()
             .from('media')
@@ -23,6 +25,12 @@ export async function GET(request: NextRequest) {
 
         if (state && state !== 'all') {
             query = query.eq('state', state);
+        }
+        if (person) {
+            query = query.contains('tagged_people', [person]);
+        }
+        if (event) {
+            query = query.contains('tagged_events', [event]);
         }
 
         const { data, error } = await query;
@@ -58,7 +66,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { file_name, mime_type, file_size, title, uploader_id } = body;
+        const { file_name, mime_type, file_size, title, uploader_id, tagged_people = [], tagged_events = [] } = body;
 
         // Validation
         if (!file_name || !mime_type || !file_size || !uploader_id) {
@@ -85,6 +93,8 @@ export async function POST(request: NextRequest) {
                 title: title || file_name,
                 state: 'PENDING',
                 uploader_id,
+                tagged_people,
+                tagged_events,
             })
             .select()
             .single();

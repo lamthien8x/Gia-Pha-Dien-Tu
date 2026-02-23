@@ -1,17 +1,18 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { Image as ImageIcon, Upload, Search, Check, X, Loader2, FileImage, FileVideo, FileText, Eye } from 'lucide-react';
+import { Image as ImageIcon, Upload, Search, Check, X, Loader2, FileImage, FileVideo, FileText, Eye, Tags, Calendar, UserPlus, Edit2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
-import { mediaApi } from '@/lib/api';
+import { TagPicker } from '@/components/ui/tag-picker';
+import { mediaApi, peopleApi, eventsApi } from '@/lib/api';
 
 interface MediaItem {
     id: string;
@@ -24,6 +25,8 @@ interface MediaItem {
     uploader_id: string | null;
     created_at: string;
     uploader?: { display_name: string | null; email: string };
+    tagged_people?: string[] | null;
+    tagged_events?: string[] | null;
 }
 
 const STATE_BADGE: Record<string, { variant: 'default' | 'secondary' | 'destructive'; label: string }> = {
@@ -42,6 +45,22 @@ export default function MediaLibraryPage() {
     const [error, setError] = useState('');
     const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
 
+    // Dữ liệu cho Tagging
+    const [peopleList, setPeopleList] = useState<any[]>([]);
+    const [eventsList, setEventsList] = useState<any[]>([]);
+
+    // Upload Dialog State
+    const [uploadDialogFile, setUploadDialogFile] = useState<File | null>(null);
+    const [uploadTitle, setUploadTitle] = useState('');
+    const [uploadPeople, setUploadPeople] = useState<string[]>([]);
+    const [uploadEvents, setUploadEvents] = useState<string[]>([]);
+
+    // Edit Tags State
+    const [editTagsItem, setEditTagsItem] = useState<MediaItem | null>(null);
+    const [editPeople, setEditPeople] = useState<string[]>([]);
+    const [editEvents, setEditEvents] = useState<string[]>([]);
+    const [savingTags, setSavingTags] = useState(false);
+
     const fetchMedia = useCallback(async (state?: string) => {
         setLoading(true);
         const { data, error } = await mediaApi.list(state);
@@ -55,21 +74,76 @@ export default function MediaLibraryPage() {
 
     useEffect(() => { fetchMedia(tab === 'all' ? undefined : tab); }, [tab, fetchMedia]);
 
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    useEffect(() => {
+        if (!isLoggedIn) return;
+        Promise.all([
+            peopleApi.list(),
+            eventsApi.list()
+        ]).then(([pRes, eRes]) => {
+            if (pRes.data) setPeopleList(pRes.data);
+            if (eRes.data) setEventsList(eRes.data);
+        });
+    }, [isLoggedIn]);
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !user) return;
+        if (!file) return;
+        setUploadDialogFile(file);
+        setUploadTitle(file.name);
+        setUploadPeople([]);
+        setUploadEvents([]);
+        if (fileRef.current) fileRef.current.value = '';
+    };
+
+    const handleConfirmUpload = async () => {
+        if (!uploadDialogFile || !user) return;
         setUploading(true);
         setError('');
 
-        const { error } = await mediaApi.upload(file, user.id, file.name);
+        const { error } = await mediaApi.upload(uploadDialogFile, user.id, uploadTitle, uploadPeople, uploadEvents);
         if (error) {
             setError(error);
         } else {
-            // Refresh danh sách
             fetchMedia(tab === 'all' ? undefined : tab);
+            setUploadDialogFile(null);
         }
         setUploading(false);
-        if (fileRef.current) fileRef.current.value = '';
+    };
+
+    const handleCreateEvent = async (title: string, isEditMode: boolean = false) => {
+        if (!user) return;
+        const res = await eventsApi.create({
+            title,
+            start_at: new Date().toISOString(),
+            creator_id: user.id,
+            type: 'OTHER' // Default type
+        });
+        if (res.data) {
+            const newEvent = res.data as any;
+            setEventsList([...eventsList, newEvent]);
+            if (isEditMode) {
+                setEditEvents([...editEvents, newEvent.id]);
+            } else {
+                setUploadEvents([...uploadEvents, newEvent.id]);
+            }
+        } else {
+            alert(res.error || 'Lỗi tạo sự kiện');
+        }
+    };
+
+    const handleSaveTags = async () => {
+        if (!editTagsItem) return;
+        setSavingTags(true);
+        const { error } = await mediaApi.updateTags(editTagsItem.id, editPeople, editEvents);
+        if (error) {
+            setError(error);
+        } else {
+            // Update local state to reflect new tags
+            setItems(prev => prev.map(item => item.id === editTagsItem.id ? { ...item, tagged_people: editPeople, tagged_events: editEvents } : item));
+            setPreviewItem(prev => prev ? { ...prev, tagged_people: editPeople, tagged_events: editEvents } : null);
+            setEditTagsItem(null);
+        }
+        setSavingTags(false);
     };
 
     const handleAction = async (id: string, action: 'approve' | 'reject') => {
@@ -108,9 +182,9 @@ export default function MediaLibraryPage() {
                 </div>
                 {isLoggedIn && (
                     <div>
-                        <input ref={fileRef} type="file" className="hidden" accept="image/*,video/*,.pdf" onChange={handleUpload} />
+                        <input ref={fileRef} type="file" className="hidden" accept="image/*,video/*,.pdf" onChange={handleFileSelect} />
                         <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-                            <Upload className="mr-2 h-4 w-4" />{uploading ? 'Đang tải...' : 'Tải lên'}
+                            <Upload className="mr-2 h-4 w-4" />{uploading ? 'Đang chuẩn bị...' : 'Tải lên'}
                         </Button>
                     </div>
                 )}
@@ -180,6 +254,32 @@ export default function MediaLibraryPage() {
                                     <p className="text-xs text-muted-foreground">
                                         {item.uploader?.display_name || item.uploader?.email?.split('@')[0] || 'Ẩn danh'} · {new Date(item.created_at).toLocaleDateString('vi-VN')}
                                     </p>
+                                    {item.tagged_people && item.tagged_people.length > 0 && (
+                                        <div className="flex -space-x-2 overflow-hidden mt-2">
+                                            {item.tagged_people.map((id) => {
+                                                const p = peopleList.find(x => x.handle === id);
+                                                if (!p) return null;
+                                                return (
+                                                    <div key={id} className="inline-block h-6 w-6 rounded-full ring-2 ring-background bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary" title={p.display_name}>
+                                                        {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full rounded-full object-cover" /> : (p.display_name?.charAt(0) || '?')}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                    {item.tagged_events && item.tagged_events.length > 0 && (
+                                        <div className="flex gap-1 flex-wrap mt-1">
+                                            {item.tagged_events.map((id) => {
+                                                const e = eventsList.find(x => x.id === id);
+                                                if (!e) return null;
+                                                return (
+                                                    <Badge key={id} variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted/50 rounded-sm">
+                                                        {e.title}
+                                                    </Badge>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                     {isAdmin && item.state === 'PENDING' && (
                                         <div className="flex gap-2 pt-2">
                                             <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAction(item.id, 'approve')}>
@@ -197,21 +297,189 @@ export default function MediaLibraryPage() {
                 </div>
             )}
 
+            {/* Upload Settings Dialog */}
+            <Dialog open={!!uploadDialogFile} onOpenChange={(open) => !open && setUploadDialogFile(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Chi tiết tài liệu tải lên</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                        <div>
+                            <label className="text-sm font-medium mb-1 block">Tên tài liệu / Tiêu đề</label>
+                            <Input value={uploadTitle} onChange={e => setUploadTitle(e.target.value)} placeholder="Nhập tiêu đề..." />
+                        </div>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                            {/* People Tagging */}
+                            <div className="border rounded-md p-3 space-y-3">
+                                <label className="text-sm font-medium flex items-center gap-2"><UserPlus className="w-4 h-4" />Những người có mặt trong bức ảnh</label>
+                                <TagPicker
+                                    options={peopleList.map(p => ({
+                                        value: p.handle,
+                                        label: p.generation ? `${p.display_name} (Đời ${p.generation})` : p.display_name,
+                                        avatar: (
+                                            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 overflow-hidden">
+                                                {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : p.display_name?.charAt(0)}
+                                            </div>
+                                        )
+                                    }))}
+                                    value={uploadPeople}
+                                    onChange={setUploadPeople}
+                                    placeholder="Chọn người..."
+                                    searchPlaceholder="Tìm tên..."
+                                />
+                            </div>
+
+                            {/* Events Tagging */}
+                            <div className="border rounded-md p-3 space-y-3">
+                                <label className="text-sm font-medium flex items-center gap-2"><Calendar className="w-4 h-4" />Gắn thẻ Sự kiện</label>
+                                <TagPicker
+                                    options={eventsList.map(e => ({
+                                        value: e.id,
+                                        label: e.title,
+                                        icon: <Calendar className="w-4 h-4 shrink-0" />
+                                    }))}
+                                    value={uploadEvents}
+                                    onChange={setUploadEvents}
+                                    placeholder="Chọn sự kiện..."
+                                    searchPlaceholder="Tìm sự kiện..."
+                                    createLabel="Tạo sự kiện"
+                                    emptyText="Chưa có sự kiện này"
+                                    onCreate={(val) => handleCreateEvent(val)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setUploadDialogFile(null)}>Hủy</Button>
+                        <Button onClick={handleConfirmUpload} disabled={uploading}>
+                            {uploading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Xác nhận Tải lên
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Preview Dialog */}
             <Dialog open={!!previewItem} onOpenChange={() => setPreviewItem(null)}>
                 <DialogContent className="max-w-4xl">
                     <DialogHeader>
-                        <DialogTitle>{previewItem?.title || previewItem?.file_name}</DialogTitle>
+                        <div className="flex items-center justify-between pr-4">
+                            <DialogTitle>{previewItem?.title || previewItem?.file_name}</DialogTitle>
+                            {isLoggedIn && (
+                                <Button variant="outline" size="sm" onClick={() => {
+                                    setEditPeople(previewItem?.tagged_people || []);
+                                    setEditEvents(previewItem?.tagged_events || []);
+                                    setEditTagsItem(previewItem);
+                                }}>
+                                    <Edit2 className="w-4 h-4 mr-2" /> Gắn thẻ
+                                </Button>
+                            )}
+                        </div>
                     </DialogHeader>
                     {previewItem && getPublicUrl(previewItem) && (
-                        <div className="flex items-center justify-center">
+                        <div className="flex flex-col items-center justify-center gap-4">
                             <img
                                 src={getPublicUrl(previewItem)!}
                                 alt={previewItem.title || previewItem.file_name}
-                                className="max-h-[70vh] object-contain"
+                                className="max-h-[60vh] object-contain"
                             />
+
+                            {/* Tags display in preview */}
+                            <div className="w-full text-left space-y-2">
+                                {previewItem.tagged_people && previewItem.tagged_people.length > 0 && (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Tags className="w-4 h-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">Những người có mặt trong bức ảnh:</span>
+                                        {previewItem.tagged_people.map(id => {
+                                            const p = peopleList.find(x => x.handle === id);
+                                            return (
+                                                <Badge key={id} variant="secondary" className="gap-1 pr-2 pl-1 py-1 font-medium bg-muted/60">
+                                                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 overflow-hidden">
+                                                        {p?.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : (p?.display_name?.charAt(0) || '?')}
+                                                    </div>
+                                                    {p?.generation ? `${p.display_name} (Đời ${p.generation})` : (p?.display_name || id)}
+                                                </Badge>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                                {previewItem.tagged_events && previewItem.tagged_events.length > 0 && (
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <Calendar className="w-4 h-4 text-muted-foreground" />
+                                        <span className="text-sm font-medium">Sự kiện:</span>
+                                        {previewItem.tagged_events.map(id => {
+                                            const e = eventsList.find(x => x.id === id);
+                                            return (
+                                                <Badge key={id} variant="secondary" className="gap-1 font-medium bg-muted/60">
+                                                    <Calendar className="w-3 h-3 text-muted-foreground" />
+                                                    {e?.title || 'Sự kiện'}
+                                                </Badge>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Tags Dialog */}
+            <Dialog open={!!editTagsItem} onOpenChange={(open) => !open && setEditTagsItem(null)}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Gắn thẻ: {editTagsItem?.title || editTagsItem?.file_name}</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 pt-4">
+                        <div className="grid md:grid-cols-2 gap-4">
+                            {/* People Tagging */}
+                            <div className="border rounded-md p-3 space-y-3">
+                                <label className="text-sm font-medium flex items-center gap-2"><UserPlus className="w-4 h-4" />Những người có mặt trong bức ảnh</label>
+                                <TagPicker
+                                    options={peopleList.map(p => ({
+                                        value: p.handle,
+                                        label: p.generation ? `${p.display_name} (Đời ${p.generation})` : p.display_name,
+                                        avatar: (
+                                            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 overflow-hidden">
+                                                {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full object-cover" /> : p.display_name?.charAt(0)}
+                                            </div>
+                                        )
+                                    }))}
+                                    value={editPeople}
+                                    onChange={setEditPeople}
+                                    placeholder="Chọn người..."
+                                    searchPlaceholder="Tìm tên..."
+                                />
+                            </div>
+
+                            {/* Events Tagging */}
+                            <div className="border rounded-md p-3 space-y-3">
+                                <label className="text-sm font-medium flex items-center gap-2"><Calendar className="w-4 h-4" />Sự kiện</label>
+                                <TagPicker
+                                    options={eventsList.map(e => ({
+                                        value: e.id,
+                                        label: e.title,
+                                        icon: <Calendar className="w-4 h-4 shrink-0" />
+                                    }))}
+                                    value={editEvents}
+                                    onChange={setEditEvents}
+                                    placeholder="Chọn sự kiện..."
+                                    searchPlaceholder="Tìm sự kiện..."
+                                    createLabel="Tạo sự kiện"
+                                    emptyText="Chưa có sự kiện này"
+                                    onCreate={(val) => handleCreateEvent(val, true)}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => setEditTagsItem(null)}>Hủy</Button>
+                        <Button onClick={handleSaveTags} disabled={savingTags}>
+                            {savingTags && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                            Lưu thay đổi
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

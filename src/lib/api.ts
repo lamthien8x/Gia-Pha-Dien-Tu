@@ -46,12 +46,24 @@ export const mediaApi = {
         return fetchApi<any[]>(`/media${query}`);
     },
 
+    // Lấy danh sách media theo người được gắn thẻ
+    listByPerson: async (personHandle: string) => {
+        return fetchApi<any[]>(`/media?person=${personHandle}&state=PUBLISHED`); // Only show PUBLISHED media on person profile
+    },
+
+    // Lấy danh sách media theo sự kiện được gắn thẻ
+    listByEvent: async (eventId: string) => {
+        return fetchApi<any[]>(`/media?event=${eventId}&state=PUBLISHED`); // Only show PUBLISHED media on event profile
+    },
+
     // Upload file (multipart/form-data)
-    upload: async (file: File, userId: string, title?: string) => {
+    upload: async (file: File, userId: string, title?: string, taggedPeople?: string[], taggedEvents?: string[]) => {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('userId', userId);
         if (title) formData.append('title', title);
+        if (taggedPeople && taggedPeople.length > 0) formData.append('taggedPeople', JSON.stringify(taggedPeople));
+        if (taggedEvents && taggedEvents.length > 0) formData.append('taggedEvents', JSON.stringify(taggedEvents));
 
         try {
             const response = await fetch(`${API_BASE}/media/upload`, {
@@ -77,6 +89,14 @@ export const mediaApi = {
         return fetchApi(`/media/${id}`, {
             method: 'PATCH',
             body: JSON.stringify({ action }),
+        });
+    },
+
+    // Update tags for media
+    updateTags: async (id: string, taggedPeople: string[], taggedEvents: string[]) => {
+        return fetchApi(`/media/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ action: 'update_tags', tagged_people: taggedPeople, tagged_events: taggedEvents }),
         });
     },
 

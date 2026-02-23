@@ -38,7 +38,7 @@ export default function DashboardPage() {
 
     const cards = [
         { title: 'Thành viên gia phả', icon: TreePine, value: stats.people, desc: 'Trong cơ sở dữ liệu', href: '/' },
-        { title: 'Dòng họ (families)', icon: Users, value: stats.families, desc: 'Gia đình đã ghi nhận', href: '/' },
+        { title: 'Gia đình (families)', icon: Users, value: stats.families, desc: 'Gia đình đã ghi nhận', href: '/' },
         { title: 'Tài khoản', icon: Users, value: stats.profiles, desc: 'Người dùng đã đăng ký', href: '/directory' },
         { title: 'Bài viết', icon: Newspaper, value: stats.posts, desc: 'Bảng tin dòng họ', href: '/feed' },
         { title: 'Sự kiện', icon: CalendarDays, value: stats.events, desc: 'Hoạt động sắp tới', href: '/events' },
@@ -50,7 +50,7 @@ export default function DashboardPage() {
             <div>
                 <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
                     <Home className="h-6 w-6" />
-                    Trang chủ
+                    Tổng quan
                 </h1>
                 <p className="text-muted-foreground">Chào mừng đến với Gia phả dòng họ Hồ</p>
             </div>

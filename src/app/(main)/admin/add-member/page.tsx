@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Save, X, UserPlus, ArrowUp, ArrowDown, ChevronDown, ChevronUp } from 'lucide-react';
+import { Save, X, UserPlus, ArrowUp, ArrowDown, Heart, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,7 +16,7 @@ interface PersonOption {
     generation: number;
 }
 
-type Mode = 'descendant' | 'ancestor';
+type Mode = 'descendant' | 'ancestor' | 'spouse';
 
 export default function AddMemberPage() {
     const router = useRouter();
@@ -49,6 +49,9 @@ export default function AddMemberPage() {
     const [allPeople, setAllPeople] = useState<PersonOption[]>([]);
     const [selectedChild, setSelectedChild] = useState('');
 
+    // Spouse mode: choose existing person to marry
+    const [selectedSpouseOf, setSelectedSpouseOf] = useState('');
+
     const [showContact, setShowContact] = useState(false);
 
     useEffect(() => {
@@ -70,6 +73,20 @@ export default function AddMemberPage() {
             if (child) setGeneration(String(child.generation - 1));
         }
     }, [selectedChild, allPeople, mode]);
+
+    // Spouse: same generation, auto-set opposite gender, ngoại tộc
+    useEffect(() => {
+        if (mode === 'spouse' && selectedSpouseOf) {
+            const person = allPeople.find(p => p.handle === selectedSpouseOf);
+            if (person) {
+                setGeneration(String(person.generation));
+                // Auto-set opposite gender
+                setGender(person.gender === 1 ? '2' : '1');
+                // Spouse is typically ngoại tộc
+                setIsPatrilineal(false);
+            }
+        }
+    }, [selectedSpouseOf, allPeople, mode]);
 
     const fetchPeople = async () => {
         try {
@@ -101,6 +118,7 @@ export default function AddMemberPage() {
         setIsLiving(true); setGeneration('1'); setIsPatrilineal(true);
         setPhone(''); setEmail(''); setAddress(''); setNotes('');
         setSelectedFather(''); setSelectedMother(''); setSelectedChild('');
+        setSelectedSpouseOf('');
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -190,6 +208,71 @@ export default function AddMemberPage() {
                     // Update child's parent_families
                     await supabase.from('people').update({ parent_families: [familyHandle] }).eq('handle', selectedChild);
                 }
+
+            } else if (mode === 'spouse' && selectedSpouseOf) {
+                // New person is a spouse → find existing family or create one
+                const spousePerson = allPeople.find(p => p.handle === selectedSpouseOf);
+                if (!spousePerson) throw new Error('Không tìm thấy người đã chọn');
+
+                // Determine roles
+                const newPersonIsMale = gender === '1';
+                const fatherHandle = newPersonIsMale ? handle : selectedSpouseOf;
+                const motherHandle = newPersonIsMale ? selectedSpouseOf : handle;
+
+                // Check if selected person already has a family (as father or mother)
+                const { data: existingFamilies } = await supabase
+                    .from('families')
+                    .select('handle, father_handle, mother_handle, children')
+                    .or(`father_handle.eq.${selectedSpouseOf},mother_handle.eq.${selectedSpouseOf}`);
+
+                if (existingFamilies && existingFamilies.length > 0) {
+                    // Find first family that doesn't already have the other spouse role filled
+                    const targetFamily = existingFamilies.find(f => {
+                        if (newPersonIsMale) return !f.father_handle; // Need to fill father
+                        return !f.mother_handle; // Need to fill mother
+                    }) || existingFamilies[0]; // Fallback to first family
+
+                    const updateField = newPersonIsMale ? 'father_handle' : 'mother_handle';
+
+                    // Only update if the role is empty
+                    if ((newPersonIsMale && !targetFamily.father_handle) || (!newPersonIsMale && !targetFamily.mother_handle)) {
+                        await supabase.from('families').update({ [updateField]: handle }).eq('handle', targetFamily.handle);
+                        // Update new person's families
+                        await supabase.from('people').update({ families: [targetFamily.handle] }).eq('handle', handle);
+                    } else {
+                        // The existing family already has both parents → create new family for this couple
+                        const newFamilyHandle = `F${Date.now()}`;
+                        const { error: famErr } = await supabase.from('families').insert({
+                            handle: newFamilyHandle,
+                            father_handle: fatherHandle,
+                            mother_handle: motherHandle,
+                            children: [],
+                        });
+                        if (famErr) throw famErr;
+
+                        // Update both people's families
+                        await supabase.from('people').update({ families: [newFamilyHandle] }).eq('handle', handle);
+                        const { data: spouseData } = await supabase.from('people').select('families').eq('handle', selectedSpouseOf).single();
+                        const spouseFamilies = [...((spouseData?.families as string[]) || []), newFamilyHandle];
+                        await supabase.from('people').update({ families: spouseFamilies }).eq('handle', selectedSpouseOf);
+                    }
+                } else {
+                    // No existing family → create a new one
+                    const newFamilyHandle = `F${Date.now()}`;
+                    const { error: famErr } = await supabase.from('families').insert({
+                        handle: newFamilyHandle,
+                        father_handle: fatherHandle,
+                        mother_handle: motherHandle,
+                        children: [],
+                    });
+                    if (famErr) throw famErr;
+
+                    // Update both people's families
+                    await supabase.from('people').update({ families: [newFamilyHandle] }).eq('handle', handle);
+                    const { data: spouseData } = await supabase.from('people').select('families').eq('handle', selectedSpouseOf).single();
+                    const spouseFamilies = [...((spouseData?.families as string[]) || []), newFamilyHandle];
+                    await supabase.from('people').update({ families: spouseFamilies }).eq('handle', selectedSpouseOf);
+                }
             }
 
             if (shiftAmount > 0) {
@@ -208,11 +291,11 @@ export default function AddMemberPage() {
 
                 if (!res.ok) {
                     console.error('Failed to shift generations, please run SQL manually', await res.text());
-                    // We don't throw to avoid rolling back person insertion, since that succeeded
                 }
             }
 
-            setSuccess(`✅ Đã thêm "${displayName}" thành công! (Đời ${genNum})${shiftAmount > 0 ? ` - Đã tự động dời các đời khác xuống ${shiftAmount} bậc` : ''}`);
+            const modeLabel = mode === 'descendant' ? '' : mode === 'ancestor' ? '' : ' (vợ/chồng)';
+            setSuccess(`✅ Đã thêm "${displayName}"${modeLabel} thành công! (Đời ${genNum})${shiftAmount > 0 ? ` - Đã tự động dời các đời khác xuống ${shiftAmount} bậc` : ''}`);
             resetForm();
             await fetchPeople();
             setTimeout(() => setSuccess(''), 5000);
@@ -237,7 +320,7 @@ export default function AddMemberPage() {
             </div>
 
             {/* Mode selector */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
                 <button
                     type="button"
                     onClick={() => setMode('descendant')}
@@ -249,8 +332,8 @@ export default function AddMemberPage() {
                         <ArrowDown className="h-4 w-4" />
                     </div>
                     <div>
-                        <p className="font-semibold text-sm">Thêm thế hệ sau</p>
-                        <p className="text-xs text-muted-foreground">Người này là con/cháu</p>
+                        <p className="font-semibold text-sm">Thêm con/cháu</p>
+                        <p className="text-xs text-muted-foreground">Thế hệ sau</p>
                     </div>
                 </button>
                 <button
@@ -264,8 +347,23 @@ export default function AddMemberPage() {
                         <ArrowUp className="h-4 w-4" />
                     </div>
                     <div>
-                        <p className="font-semibold text-sm">Thêm thế hệ trước</p>
-                        <p className="text-xs text-muted-foreground">Người này là cha/mẹ tổ</p>
+                        <p className="font-semibold text-sm">Thêm cha/mẹ tổ</p>
+                        <p className="text-xs text-muted-foreground">Thế hệ trước</p>
+                    </div>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => setMode('spouse')}
+                    className={`flex items-center gap-3 rounded-xl border-2 p-4 text-left transition-colors ${mode === 'spouse'
+                        ? 'border-pink-500 bg-pink-50 text-pink-600 dark:bg-pink-950/30'
+                        : 'border-border hover:border-pink-300'}`}
+                >
+                    <div className={`rounded-full p-2 ${mode === 'spouse' ? 'bg-pink-100 dark:bg-pink-900/40' : 'bg-muted'}`}>
+                        <Heart className="h-4 w-4" />
+                    </div>
+                    <div>
+                        <p className="font-semibold text-sm">Thêm vợ/chồng</p>
+                        <p className="text-xs text-muted-foreground">Cùng thế hệ</p>
                     </div>
                 </button>
             </div>
@@ -301,6 +399,9 @@ export default function AddMemberPage() {
                                             {l}
                                         </label>
                                     ))}
+                                    {mode === 'spouse' && selectedSpouseOf && (
+                                        <span className="text-xs text-muted-foreground ml-auto self-center">(tự động theo người đã chọn)</span>
+                                    )}
                                 </div>
                             </div>
                         </div>
@@ -355,16 +456,22 @@ export default function AddMemberPage() {
                 </Card>
 
                 {/* Relationship section — changes based on mode */}
-                <Card className="border-primary/30">
+                <Card className={mode === 'spouse' ? 'border-pink-300/70' : 'border-primary/30'}>
                     <CardHeader>
                         <CardTitle className="text-base flex items-center gap-2">
-                            {mode === 'descendant' ? <ArrowDown className="h-4 w-4 text-primary" /> : <ArrowUp className="h-4 w-4 text-primary" />}
-                            {mode === 'descendant' ? 'Quan hệ — Cha mẹ của người này' : 'Quan hệ — Người này là cha/mẹ của'}
+                            {mode === 'descendant' ? <ArrowDown className="h-4 w-4 text-primary" />
+                                : mode === 'ancestor' ? <ArrowUp className="h-4 w-4 text-primary" />
+                                    : <Heart className="h-4 w-4 text-pink-500" />}
+                            {mode === 'descendant' ? 'Quan hệ — Cha mẹ của người này'
+                                : mode === 'ancestor' ? 'Quan hệ — Người này là cha/mẹ của'
+                                    : 'Quan hệ — Vợ/chồng của ai?'}
                         </CardTitle>
                         <CardDescription>
                             {mode === 'descendant'
                                 ? 'Chọn cha (bắt buộc nếu muốn gắn vào cây phả hệ). Đời sẽ tự cập nhật.'
-                                : 'Chọn con/cháu đã có trong hệ thống. Đời sẽ tự cập nhật (= đời con - 1).'}
+                                : mode === 'ancestor'
+                                    ? 'Chọn con/cháu đã có trong hệ thống. Đời sẽ tự cập nhật (= đời con - 1).'
+                                    : 'Chọn thành viên đã có trong hệ thống. Người mới sẽ cùng đời và giới tính tự điều chỉnh.'}
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3">
@@ -395,7 +502,7 @@ export default function AddMemberPage() {
                                     </select>
                                 </div>
                             </div>
-                        ) : (
+                        ) : mode === 'ancestor' ? (
                             <div className="space-y-2">
                                 <label className="text-sm font-medium">Con/cháu đã có trong hệ thống *</label>
                                 <select value={selectedChild} onChange={(e) => setSelectedChild(e.target.value)}
@@ -417,6 +524,33 @@ export default function AddMemberPage() {
                                         )}
                                     </p>
                                 )}
+                            </div>
+                        ) : (
+                            /* Spouse mode */
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Là vợ/chồng của *</label>
+                                <select value={selectedSpouseOf} onChange={(e) => setSelectedSpouseOf(e.target.value)}
+                                    className="w-full border rounded-lg px-3 py-2 text-sm bg-background">
+                                    <option value="">-- Chọn thành viên --</option>
+                                    {allPeople.map((p) => (
+                                        <option key={p.handle} value={p.handle}>
+                                            {p.display_name} · Đời {p.generation} · {p.gender === 1 ? 'Nam' : 'Nữ'}
+                                        </option>
+                                    ))}
+                                </select>
+                                {selectedSpouseOf && (() => {
+                                    const sp = allPeople.find(p => p.handle === selectedSpouseOf);
+                                    if (!sp) return null;
+                                    return (
+                                        <div className="rounded-lg bg-pink-50 dark:bg-pink-950/20 border border-pink-200 p-3 mt-2">
+                                            <p className="text-xs text-pink-700 dark:text-pink-400">
+                                                💑 <strong>{displayName || '(chưa nhập tên)'}</strong> sẽ là <strong>{sp.gender === 1 ? 'vợ' : 'chồng'}</strong> của <strong>{sp.display_name}</strong>
+                                                <br />
+                                                📌 Đời: <strong>{sp.generation}</strong> · Giới tính: <strong>{sp.gender === 1 ? 'Nữ' : 'Nam'}</strong> · Ngoại tộc
+                                            </p>
+                                        </div>
+                                    );
+                                })()}
                             </div>
                         )}
                     </CardContent>

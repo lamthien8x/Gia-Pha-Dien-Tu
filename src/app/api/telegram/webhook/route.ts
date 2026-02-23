@@ -81,8 +81,10 @@ export async function POST(request: NextRequest) {
 
         const admin = getAdmin();
 
-        // Find pending contributions for this person created at/after the batch timestamp
-        const batchDate = new Date(parseInt(batchTs));
+        // Find pending contributions for this person
+        // Subtract 60s buffer from batchTs to account for clock skew between
+        // the client (Date.now()) and Supabase server (DEFAULT now())
+        const batchDate = new Date(parseInt(batchTs) - 60_000);
         const { data: contributions, error } = await admin
             .from('contributions')
             .select('*')
@@ -90,6 +92,8 @@ export async function POST(request: NextRequest) {
             .eq('status', 'pending')
             .gte('created_at', batchDate.toISOString())
             .order('created_at', { ascending: true });
+
+        console.log(`[Telegram Webhook] ${action} for ${personHandle}, batchTs=${batchTs}, found=${contributions?.length ?? 0}`);
 
         if (error) {
             console.error('[Telegram Webhook] DB error:', error);

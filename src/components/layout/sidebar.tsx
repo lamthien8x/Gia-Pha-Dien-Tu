@@ -28,9 +28,9 @@ import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/s
 
 const navItems = [
     { href: '/', label: 'Cây gia phả', icon: TreePine },
-    { href: '/home', label: 'Trang chủ', icon: Home },
+    { href: '/home', label: 'Tổng quan', icon: Home },
     { href: '/feed', label: 'Bảng tin', icon: Newspaper },
-    { href: '/directory', label: 'Danh bạ', icon: Contact },
+    // { href: '/directory', label: 'Danh bạ', icon: Contact },
     { href: '/events', label: 'Sự kiện', icon: CalendarDays },
     { href: '/book', label: 'Sách gia phả', icon: BookOpen },
     { href: '/people', label: 'Thành viên', icon: Users },

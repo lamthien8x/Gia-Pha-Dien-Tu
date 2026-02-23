@@ -234,6 +234,8 @@ CREATE TABLE IF NOT EXISTS media (
     description TEXT,
     state TEXT NOT NULL DEFAULT 'PENDING' CHECK (state IN ('PENDING', 'PUBLISHED', 'REJECTED')),
     uploader_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    tagged_people TEXT[] DEFAULT '{}',
+    tagged_events UUID[] DEFAULT '{}',
     created_at TIMESTAMPTZ DEFAULT now()
 );
 

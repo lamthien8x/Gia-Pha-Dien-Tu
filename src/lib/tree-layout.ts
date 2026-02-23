@@ -142,6 +142,7 @@ function buildSubtree(
     personMap: Map<string, TreeNode>,
     familyMap: Map<string, TreeFamily>,
     visited: Set<string>,
+    childOwnership?: Map<string, string>,
 ): Subtree | null {
     if (visited.has(family.handle)) return null;
     visited.add(family.handle);
@@ -157,31 +158,72 @@ function buildSubtree(
         const child = personMap.get(childHandle);
         if (!child) continue;
 
-        // Find child's own family (where child is a parent)
-        const childFamily = Array.from(familyMap.values()).find(f =>
+        // Skip children already owned by another family
+        if (childOwnership && childOwnership.has(childHandle)) continue;
+
+        // Register this child as owned by this family
+        if (childOwnership) childOwnership.set(childHandle, family.handle);
+
+        // Find ALL of child's own families (where child is a parent)
+        // A person can have multiple families (e.g., multiple marriages with different children)
+        const childFamilies = Array.from(familyMap.values()).filter(f =>
             !visited.has(f.handle) &&
             (f.fatherHandle === childHandle || f.motherHandle === childHandle)
         );
 
-        if (childFamily) {
-            const sub = buildSubtree(childFamily, personMap, familyMap, visited);
+        if (childFamilies.length > 0) {
+            // Build first family subtree normally (this becomes the child's positioned subtree)
+            const sub = buildSubtree(childFamilies[0], personMap, familyMap, visited, childOwnership);
+
+            // For additional families: build them too so all grandchildren are visited
+            // Their children will be incorporated into the first subtree via assignPositions
+            for (let i = 1; i < childFamilies.length; i++) {
+                // Mark these families as visited and process their children
+                const extraFam = childFamilies[i];
+                visited.add(extraFam.handle);
+
+                // Process each grandchild from the additional family
+                for (const grandchildHandle of extraFam.children) {
+                    const grandchild = personMap.get(grandchildHandle);
+                    if (!grandchild) continue;
+                    if (childOwnership && childOwnership.has(grandchildHandle)) continue;
+                    if (childOwnership) childOwnership.set(grandchildHandle, extraFam.handle);
+
+                    // Find grandchild's families
+                    const gcFamily = Array.from(familyMap.values()).find(f =>
+                        !visited.has(f.handle) &&
+                        (f.fatherHandle === grandchildHandle || f.motherHandle === grandchildHandle)
+                    );
+
+                    if (gcFamily) {
+                        const gcSub = buildSubtree(gcFamily, personMap, familyMap, visited, childOwnership);
+                        if (gcSub && sub) {
+                            sub.children.push({
+                                subtree: gcSub, width: gcSub.width, anchorX: gcSub.anchorX,
+                                contour: gcSub.contour,
+                            });
+                        } else if (sub) {
+                            const leafContour: Contour = { left: [-CARD_W / 2], right: [CARD_W / 2] };
+                            sub.children.push({ leaf: grandchild, width: CARD_W, anchorX: CARD_W / 2, contour: leafContour });
+                        }
+                    } else if (sub) {
+                        const leafContour: Contour = { left: [-CARD_W / 2], right: [CARD_W / 2] };
+                        sub.children.push({ leaf: grandchild, width: CARD_W, anchorX: CARD_W / 2, contour: leafContour });
+                    }
+                }
+            }
+
             if (sub) {
                 children.push({
                     subtree: sub, width: sub.width, anchorX: sub.anchorX,
                     contour: sub.contour,
                 });
             } else {
-                const leafContour: Contour = {
-                    left: [-CARD_W / 2],
-                    right: [CARD_W / 2],
-                };
+                const leafContour: Contour = { left: [-CARD_W / 2], right: [CARD_W / 2] };
                 children.push({ leaf: child, width: CARD_W, anchorX: CARD_W / 2, contour: leafContour });
             }
         } else {
-            const leafContour: Contour = {
-                left: [-CARD_W / 2],
-                right: [CARD_W / 2],
-            };
+            const leafContour: Contour = { left: [-CARD_W / 2], right: [CARD_W / 2] };
             children.push({ leaf: child, width: CARD_W, anchorX: CARD_W / 2, contour: leafContour });
         }
     }
@@ -421,25 +463,32 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
     const rootFamilies = families.filter(f => {
         const fh = f.fatherHandle ? personMap.get(f.fatherHandle) : null;
         const mh = f.motherHandle ? personMap.get(f.motherHandle) : null;
-        return (fh && !childOfAnyFamily.has(fh.handle)) || (mh && !childOfAnyFamily.has(mh.handle));
+        if (!fh && !mh) return false; // No parents at all
+        // A family is root only if NONE of its parents are children of another family.
+        // If any parent IS a child, this family is reachable from above and not a root.
+        if (fh && childOfAnyFamily.has(fh.handle)) return false;
+        if (mh && childOfAnyFamily.has(mh.handle)) return false;
+        return true;
     });
 
     const allNodes: PositionedNode[] = [];
     const visited = new Set<string>();
     const placed = new Set<string>();
+    const childOwnership = new Map<string, string>(); // childHandle → familyHandle
     let cursorX = 0;
 
     for (const fam of rootFamilies) {
-        const subtree = buildSubtree(fam, personMap, familyMap, visited);
+        const subtree = buildSubtree(fam, personMap, familyMap, visited, childOwnership);
         if (!subtree) continue;
         assignPositions(subtree, cursorX, 0, allNodes, placed);
         cursorX += subtree.width + H_SPACE;
     }
 
     // Place orphans (people not in any family tree)
+    // Use DB generation field (1-indexed) as fallback for Y positioning
     for (const p of people) {
         if (!placed.has(p.handle)) {
-            const gen = gens.get(p.handle) ?? 0;
+            const gen = gens.get(p.handle) ?? Math.max(0, (p.generation || 1) - 1);
             allNodes.push({
                 node: p,
                 x: cursorX,
@@ -492,11 +541,13 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
         }
 
         // Parent-child connections: strictly orthogonal bus-line
+        // Only draw connections for children that are OWNED by this family
         if (patriNode && fam.children.length > 0) {
             const parentCX = patriNode.x + CARD_W / 2;
             const parentBottomY = patriNode.y + CARD_H;
 
             const placedChildren = fam.children
+                .filter(ch => !childOwnership.has(ch) || childOwnership.get(ch) === fam.handle)
                 .map(ch => nodeMap.get(ch))
                 .filter((n): n is PositionedNode => !!n);
             if (placedChildren.length === 0) continue;
@@ -592,12 +643,13 @@ export function computeLayout(people: TreeNode[], families: TreeFamily[]): Layou
 function assignGenerations(people: TreeNode[], families: TreeFamily[]): Map<string, number> {
     const gens = new Map<string, number>();
     const familyMap = new Map(families.map(f => [f.handle, f]));
+    const personMap = new Map(people.map(p => [p.handle, p]));
 
     function setGen(handle: string, gen: number) {
         const current = gens.get(handle);
         if (current !== undefined && current <= gen) return;
         gens.set(handle, gen);
-        const person = people.find(p => p.handle === handle);
+        const person = personMap.get(handle);
         if (!person) return;
         for (const famId of person.families) {
             const fam = familyMap.get(famId);
@@ -608,13 +660,26 @@ function assignGenerations(people: TreeNode[], families: TreeFamily[]): Map<stri
         }
     }
 
+    // First pass: start BFS from true roots (patrilineal, no parents)
     for (const p of people) {
-        if (p.parentFamilies.length === 0 && !gens.has(p.handle)) {
+        if (p.parentFamilies.length === 0 && p.isPatrilineal && !gens.has(p.handle)) {
             setGen(p.handle, 0);
         }
     }
+    // Second pass: non-patrilineal people without parents (e.g., spouses)
+    // Use their DB generation field (1-indexed → 0-indexed) as initial gen
     for (const p of people) {
-        if (!gens.has(p.handle)) setGen(p.handle, 0);
+        if (p.parentFamilies.length === 0 && !gens.has(p.handle)) {
+            const dbGen = Math.max(0, (p.generation || 1) - 1);
+            setGen(p.handle, dbGen);
+        }
+    }
+    // Final pass: anyone still not reached, use DB generation as fallback
+    for (const p of people) {
+        if (!gens.has(p.handle)) {
+            const dbGen = Math.max(0, (p.generation || 1) - 1);
+            setGen(p.handle, dbGen);
+        }
     }
 
     return gens;

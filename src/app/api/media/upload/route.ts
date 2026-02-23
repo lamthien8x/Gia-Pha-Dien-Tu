@@ -65,6 +65,18 @@ export async function POST(request: NextRequest) {
         }
 
         // Lưu metadata
+        const taggedPeopleJson = formData.get('taggedPeople') as string;
+        const taggedEventsJson = formData.get('taggedEvents') as string;
+
+        let tagged_people: string[] = [];
+        let tagged_events: string[] = [];
+        try {
+            if (taggedPeopleJson) tagged_people = JSON.parse(taggedPeopleJson);
+            if (taggedEventsJson) tagged_events = JSON.parse(taggedEventsJson);
+        } catch (e) {
+            console.error("Failed to parse tags", e);
+        }
+
         const { data: mediaData, error: dbError } = await getAdminClient()
             .from('media')
             .insert({
@@ -74,6 +86,8 @@ export async function POST(request: NextRequest) {
                 title: title || file.name,
                 state: 'PENDING',
                 uploader_id: userId,
+                tagged_people,
+                tagged_events,
             })
             .select()
             .single();
