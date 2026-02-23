@@ -33,6 +33,7 @@ const PEOPLE_FIELD_MAP: Record<string, string> = {
     biography: 'biography',
     notes: 'notes',
     gender: 'gender',
+    is_living: 'is_living',
 };
 
 /**
@@ -119,9 +120,12 @@ export async function POST(request: NextRequest) {
             for (const c of contributions) {
                 const dbField = PEOPLE_FIELD_MAP[c.field_name];
                 if (dbField) {
-                    const val = ['birth_year', 'death_year', 'gender'].includes(c.field_name)
-                        ? parseInt(c.new_value) || null
-                        : c.new_value || null;
+                    let val: any = c.new_value || null;
+                    if (['birth_year', 'death_year', 'gender'].includes(c.field_name)) {
+                        val = parseInt(c.new_value) || null;
+                    } else if (c.field_name === 'is_living') {
+                        val = c.new_value === 'true';
+                    }
                     await admin.from('people').update({ [dbField]: val }).eq('handle', c.person_handle);
                 }
                 await admin.from('contributions').update({

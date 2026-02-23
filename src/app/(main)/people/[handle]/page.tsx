@@ -79,14 +79,17 @@ function PersonMiniCard({ person, role }: { person: RelatedPerson; role?: string
 
 // ─── Inline edit field component ────────────────────────────
 function EditableField({
-    label, value, fieldKey, personHandle, type = 'text',
+    label, value, displayValue, fieldKey, personHandle, type = 'text',
+    options,
     onSaved,
 }: {
     label: string;
-    value: string | number | undefined | null;
+    value: string | number | boolean | undefined | null;
+    displayValue?: React.ReactNode;
     fieldKey: string;
     personHandle: string;
-    type?: 'text' | 'number' | 'textarea';
+    type?: 'text' | 'number' | 'textarea' | 'select';
+    options?: { value: string; label: string }[];
     onSaved: (key: string, val: string) => void;
 }) {
     const [editing, setEditing] = useState(false);
@@ -95,14 +98,24 @@ function EditableField({
 
     const handleSave = async () => {
         setSaving(true);
+        let finalValue: any = draft || null;
+        if (type === 'select' && (draft === 'true' || draft === 'false')) {
+            finalValue = draft === 'true';
+        } else if (type === 'select' && fieldKey === 'gender') {
+            finalValue = parseInt(draft, 10);
+        }
+
         const { error } = await supabase
             .from('people')
-            .update({ [fieldKey]: draft || null })
+            .update({ [fieldKey]: finalValue })
             .eq('handle', personHandle);
         setSaving(false);
         if (!error) {
             onSaved(fieldKey, draft);
             setEditing(false);
+        } else {
+            console.error(error);
+            alert('Lỗi cập nhật: ' + error.message);
         }
     };
 
@@ -113,7 +126,7 @@ function EditableField({
             <div className="group flex items-start justify-between gap-2">
                 <div>
                     <p className="text-xs font-medium text-muted-foreground">{label}</p>
-                    <p className="text-sm">{value ?? <span className="text-muted-foreground italic">—</span>}</p>
+                    <p className="text-sm">{displayValue ?? value ?? <span className="text-muted-foreground italic">—</span>}</p>
                 </div>
                 <button
                     onClick={() => { setDraft(String(value ?? '')); setEditing(true); }}
@@ -137,6 +150,15 @@ function EditableField({
                     rows={3}
                     className="w-full border rounded-lg px-3 py-1.5 text-sm bg-background resize-y"
                 />
+            ) : type === 'select' ? (
+                <select
+                    value={draft}
+                    onChange={e => setDraft(e.target.value)}
+                    autoFocus
+                    className="w-full border rounded-lg px-3 py-1.5 text-sm bg-background"
+                >
+                    {options?.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
             ) : (
                 <Input
                     type={type}
@@ -346,10 +368,16 @@ export default function PersonProfilePage() {
             occupation: 'occupation', company: 'company', education: 'education',
             notes: 'notes', biography: 'biography', nick_name: 'nickName',
             surname: 'surname', first_name: 'firstName',
+            is_living: 'isLiving', gender: 'gender'
         };
         const domainKey = keyMap[fieldKey];
         if (domainKey && person) {
-            setPerson(prev => prev ? { ...prev, [domainKey]: val || undefined } : prev);
+            let newVal: any = val || undefined;
+            if (fieldKey === 'is_living') newVal = val === 'true';
+            if (fieldKey === 'gender') newVal = parseInt(val, 10);
+            if (fieldKey === 'birth_year' || fieldKey === 'death_year') newVal = val ? parseInt(val, 10) : undefined;
+
+            setPerson(prev => prev ? { ...prev, [domainKey]: newVal } : prev);
         }
         setSaveMsg('✅ Đã lưu!');
         setTimeout(() => setSaveMsg(''), 2000);
@@ -395,15 +423,17 @@ export default function PersonProfilePage() {
     const genderLabel = person.gender === 1 ? 'Nam' : person.gender === 2 ? 'Nữ' : 'Không rõ';
 
     // Helper: render a field as editable (admin) or static (others)
-    const Field = ({ label, value, fieldKey, type }: {
+    const Field = ({ label, value, displayValue, fieldKey, type, options }: {
         label: string;
-        value: string | number | undefined | null;
+        value: string | number | boolean | undefined | null;
+        displayValue?: React.ReactNode;
         fieldKey: string;
-        type?: 'text' | 'number' | 'textarea';
+        type?: 'text' | 'number' | 'textarea' | 'select';
+        options?: { value: string; label: string }[];
     }) =>
         isAdmin
-            ? <EditableField label={label} value={value} fieldKey={fieldKey} personHandle={handle} type={type ?? 'text'} onSaved={handleFieldSaved} />
-            : <InfoRow label={label} value={value ? String(value) : '—'} />;
+            ? <EditableField label={label} value={value} displayValue={displayValue} fieldKey={fieldKey} personHandle={handle} type={type ?? 'text'} options={options} onSaved={handleFieldSaved} />
+            : <InfoRow label={label} value={(displayValue ?? value) ? String(displayValue ?? value) : '—'} />;
 
     return (
         <div className="space-y-6">
@@ -510,7 +540,8 @@ export default function PersonProfilePage() {
                         </CardHeader>
                         <CardContent className="grid gap-4 md:grid-cols-2">
                             <Field label="Họ tên" value={person.displayName} fieldKey="display_name" />
-                            <InfoRow label="Giới tính" value={genderLabel} />
+                            <Field label="Giới tính" value={person.gender} displayValue={genderLabel} fieldKey="gender" type="select" options={[{ value: '1', label: 'Nam' }, { value: '2', label: 'Nữ' }]} />
+                            <Field label="Tình trạng" value={person.isLiving} displayValue={person.isLiving ? 'Còn sống' : 'Đã mất'} fieldKey="is_living" type="select" options={[{ value: 'true', label: 'Còn sống' }, { value: 'false', label: 'Đã mất' }]} />
                             {person.nickName && <Field label="Tên thường gọi" value={person.nickName} fieldKey="nick_name" />}
                             <Field label="Năm sinh" value={person.birthYear} fieldKey="birth_year" type="number" />
                             {person.birthYear && <InfoRow label="Năm âm lịch" value={zodiacYear(person.birthYear) || '—'} />}

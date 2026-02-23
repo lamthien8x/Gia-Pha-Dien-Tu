@@ -143,6 +143,7 @@ function buildSubtree(
     familyMap: Map<string, TreeFamily>,
     visited: Set<string>,
     childOwnership?: Map<string, string>,
+    syntheticFamilyHandles?: Set<string>,
 ): Subtree | null {
     if (visited.has(family.handle)) return null;
     visited.add(family.handle);
@@ -159,10 +160,19 @@ function buildSubtree(
         if (!child) continue;
 
         // Skip children already owned by another family
-        if (childOwnership && childOwnership.has(childHandle)) continue;
+        if (childOwnership && childOwnership.has(childHandle)) {
+            const owner = childOwnership.get(childHandle)!;
+            if (syntheticFamilyHandles) {
+                if (!syntheticFamilyHandles.has(owner)) continue;
+            } else if (owner !== family.handle) {
+                continue;
+            }
+        }
 
-        // Register this child as owned by this family
-        if (childOwnership) childOwnership.set(childHandle, family.handle);
+        // Register this child as owned by this family (if not skipped and not already registered)
+        if (childOwnership && !childOwnership.has(childHandle)) {
+            childOwnership.set(childHandle, family.handle);
+        }
 
         // Find ALL of child's own families (where child is a parent)
         // A person can have multiple families (e.g., multiple marriages with different children)
@@ -172,46 +182,32 @@ function buildSubtree(
         );
 
         if (childFamilies.length > 0) {
-            // Build first family subtree normally (this becomes the child's positioned subtree)
-            const sub = buildSubtree(childFamilies[0], personMap, familyMap, visited, childOwnership);
+            const primaryChildFamily = childFamilies[0];
+            const allChildFamilyChildren = new Set<string>();
 
-            // For additional families: build them too so all grandchildren are visited
-            // Their children will be incorporated into the first subtree via assignPositions
-            for (let i = 1; i < childFamilies.length; i++) {
-                // Mark these families as visited and process their children
-                const extraFam = childFamilies[i];
-                visited.add(extraFam.handle);
-
-                // Process each grandchild from the additional family
-                for (const grandchildHandle of extraFam.children) {
-                    const grandchild = personMap.get(grandchildHandle);
-                    if (!grandchild) continue;
-                    if (childOwnership && childOwnership.has(grandchildHandle)) continue;
-                    if (childOwnership) childOwnership.set(grandchildHandle, extraFam.handle);
-
-                    // Find grandchild's families
-                    const gcFamily = Array.from(familyMap.values()).find(f =>
-                        !visited.has(f.handle) &&
-                        (f.fatherHandle === grandchildHandle || f.motherHandle === grandchildHandle)
-                    );
-
-                    if (gcFamily) {
-                        const gcSub = buildSubtree(gcFamily, personMap, familyMap, visited, childOwnership);
-                        if (gcSub && sub) {
-                            sub.children.push({
-                                subtree: gcSub, width: gcSub.width, anchorX: gcSub.anchorX,
-                                contour: gcSub.contour,
-                            });
-                        } else if (sub) {
-                            const leafContour: Contour = { left: [-CARD_W / 2], right: [CARD_W / 2] };
-                            sub.children.push({ leaf: grandchild, width: CARD_W, anchorX: CARD_W / 2, contour: leafContour });
-                        }
-                    } else if (sub) {
-                        const leafContour: Contour = { left: [-CARD_W / 2], right: [CARD_W / 2] };
-                        sub.children.push({ leaf: grandchild, width: CARD_W, anchorX: CARD_W / 2, contour: leafContour });
+            // Collect all children and handle ownership
+            for (const f of childFamilies) {
+                visited.add(f.handle);
+                for (const gcHandle of f.children) {
+                    allChildFamilyChildren.add(gcHandle);
+                    if (childOwnership && !childOwnership.has(gcHandle)) {
+                        childOwnership.set(gcHandle, f.handle);
                     }
                 }
             }
+
+            // Create a synthetic family containing ALL children from all marriages
+            const syntheticChildFamily: TreeFamily = {
+                ...primaryChildFamily,
+                children: Array.from(allChildFamilyChildren)
+            };
+
+            // Pass the set of family handles that are part of this synthetic family
+            const syntheticHandles = new Set(childFamilies.map(f => f.handle));
+
+            // Remove the synthetic family handle from visited so buildSubtree will actually process it
+            visited.delete(syntheticChildFamily.handle);
+            const sub = buildSubtree(syntheticChildFamily, personMap, familyMap, visited, childOwnership, syntheticHandles);
 
             if (sub) {
                 children.push({

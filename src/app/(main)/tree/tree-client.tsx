@@ -827,103 +827,89 @@ export default function TreeViewPage() {
     // connPath kept for compatibility but unused with batched rendering
 
     return (
-        <div className="flex flex-col h-[calc(100vh-80px)]">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-1 pb-2">
-                <div>
-                    <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
-                        <TreePine className="h-5 w-5" /> Cây gia phả
-                    </h1>
-                    <p className="text-muted-foreground text-xs">
-                        {layout ? `${layout.nodes.length} thành viên` : 'Đang tải...'}
-                        {viewMode !== 'full' && focusPerson && (
-                            <span className="ml-1 text-blue-500">
-                                • {viewMode === 'ancestor' ? 'Tổ tiên' : 'Hậu duệ'} của{' '}
-                                {treeData?.people.find(p => p.handle === focusPerson)?.displayName}
-                            </span>
-                        )}
-                    </p>
-                </div>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                    {/* View modes */}
-                    <div className="flex rounded-lg border overflow-hidden text-xs">
-                        {([['full', 'Toàn cảnh', Eye], ['ancestor', 'Tổ tiên', Users], ['descendant', 'Hậu duệ', GitBranch]] as const).map(([mode, label, Icon]) => (
-                            <button key={mode} onClick={() => changeViewMode(mode)}
-                                className={`px-2.5 py-1.5 font-medium flex items-center gap-1 transition-colors ${mode !== 'full' ? 'border-l' : ''} ${viewMode === mode ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}>
-                                <Icon className="h-3.5 w-3.5" /> <span className="hidden sm:inline">{label}</span>
-                            </button>
-                        ))}
-                    </div>
-                    {/* Search */}
-                    <div className="relative flex-1 sm:flex-none">
-                        <div className="relative w-full sm:w-44">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                            <Input placeholder="Tìm kiếm..." value={searchQuery}
-                                onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); }}
-                                onFocus={() => setShowSearch(true)} className="pl-8 h-8 text-xs" />
-                        </div>
+        <div className="absolute inset-0 z-10 bg-background flex flex-col">
+
+            {/* Tree viewport + Editor panel row */}
+            <div className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0 bg-background">
+                <div ref={viewportRef}
+                    className="tree-viewport flex-1 relative overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100 cursor-grab active:cursor-grabbing select-none"
+                    onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
+                    onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
+                    onClick={() => { setShowSearch(false); setContextMenu(null); if (editorMode) setSelectedCard(null); }}
+                >
+                    {/* Floating Search */}
+                    <div className="absolute bottom-10 left-4 z-50">
                         {showSearch && searchResults.length > 0 && (
-                            <Card className="absolute z-50 w-56 right-0 top-10 shadow-lg">
-                                <CardContent className="p-1 max-h-52 overflow-y-auto">
+                            <Card className="absolute z-50 w-full left-0 bottom-full mb-2 shadow-lg border-slate-200 bg-white/95 backdrop-blur">
+                                <CardContent className="p-1 max-h-64 overflow-y-auto">
                                     {searchResults.map(p => (
-                                        <button key={p.handle} onClick={() => {
+                                        <button key={p.handle} onClick={(e) => {
+                                            e.stopPropagation();
                                             setFocusPerson(p.handle);
                                             setViewMode('descendant');
                                             autoCollapseForDescendant(p.handle);
                                             setShowSearch(false);
                                             setSearchQuery('');
                                         }}
-                                            className="w-full text-left px-2.5 py-1.5 rounded text-xs hover:bg-accent transition-colors flex justify-between">
-                                            <span className="font-medium">{p.displayName}</span>
-                                            <span className="text-muted-foreground">{'generation' in p ? `Đời ${(p as any).generation}` : ''}{p.isPrivacyFiltered ? ' 🔒' : ''}</span>
+                                            className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-slate-100 transition-colors flex justify-between items-center group">
+                                            <span className="font-medium group-hover:text-emerald-700">{p.displayName}</span>
+                                            <span className="text-xs text-slate-500">{'generation' in p ? `Đời ${(p as any).generation}` : ''}</span>
                                         </button>
                                     ))}
                                 </CardContent>
                             </Card>
                         )}
+                        <div className="relative w-56">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Tìm kiếm thành viên..." value={searchQuery}
+                                onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); }}
+                                onFocus={() => setShowSearch(true)}
+                                className="pl-9 h-10 rounded-full border-slate-200 bg-white/90 backdrop-blur shadow-sm focus-visible:ring-emerald-500/50" />
+                        </div>
                     </div>
-                    {/* Controls */}
-                    <div className="flex gap-0.5 overflow-x-auto pb-1 sm:pb-0">
-                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Thu gọn tất cả" onClick={collapseAll}><ChevronsDownUp className="h-3.5 w-3.5" /></Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Mở rộng tất cả" onClick={expandAll}><ChevronsUpDown className="h-3.5 w-3.5" /></Button>
-                        <div className="w-px bg-border mx-0.5" />
-                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setTransform(t => {
-                            const vw = viewportRef.current?.clientWidth ?? 0; const vh = viewportRef.current?.clientHeight ?? 0;
-                            const cx = vw / 2; const cy = vh / 2;
-                            const ns = Math.min(t.scale * 1.3, 3); const r = ns / t.scale;
-                            return { scale: ns, x: cx - (cx - t.x) * r, y: cy - (cy - t.y) * r };
-                        })}><ZoomIn className="h-3.5 w-3.5" /></Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={() => setTransform(t => {
-                            const vw = viewportRef.current?.clientWidth ?? 0; const vh = viewportRef.current?.clientHeight ?? 0;
-                            const cx = vw / 2; const cy = vh / 2;
-                            const ns = Math.max(t.scale / 1.3, 0.15); const r = ns / t.scale;
-                            return { scale: ns, x: cx - (cx - t.x) * r, y: cy - (cy - t.y) * r };
-                        })}><ZoomOut className="h-3.5 w-3.5" /></Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8 shrink-0" onClick={fitAll}><Maximize2 className="h-3.5 w-3.5" /></Button>
-                        <div className="w-px bg-border mx-0.5" />
-                        {isAdmin && (
-                            <Button
-                                variant={editorMode ? 'default' : 'outline'}
-                                size="icon"
-                                className={`h-8 w-8 shrink-0 ${editorMode ? 'bg-blue-600 hover:bg-blue-700 text-white' : ''}`}
-                                title={editorMode ? 'Tắt chỉnh sửa' : 'Chế độ chỉnh sửa'}
-                                onClick={() => { setEditorMode(m => !m); setSelectedCard(null); }}
-                            >
-                                <Pencil className="h-3.5 w-3.5" />
-                            </Button>
-                        )}
-                    </div>
-                </div>
-            </div>
 
-            {/* Tree viewport + Editor panel row */}
-            <div className="flex-1 flex flex-col lg:flex-row gap-0 min-h-0">
-                <div ref={viewportRef}
-                    className="tree-viewport flex-1 relative overflow-hidden rounded-xl border-2 bg-gradient-to-br from-background to-muted/30 cursor-grab active:cursor-grabbing select-none"
-                    onMouseDown={handleMouseDown} onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
-                    onClick={() => { setShowSearch(false); setContextMenu(null); if (editorMode) setSelectedCard(null); }}
-                >
+                    {/* Floating Controls */}
+                    <div className="absolute bottom-10 right-4 z-50 flex flex-col gap-2">
+                        {isAdmin && (
+                            <div className="flex flex-col bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-xl p-1 mb-2">
+                                <Button
+                                    variant={editorMode ? 'default' : 'ghost'}
+                                    size="icon"
+                                    className={`h-9 w-9 ${editorMode ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'hover:bg-slate-100 text-slate-600'}`}
+                                    title={editorMode ? 'Tắt chỉnh sửa' : 'Chế độ chỉnh sửa'}
+                                    onClick={(e) => { e.stopPropagation(); setEditorMode(m => !m); setSelectedCard(null); }}
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        )}
+                        <div className="flex flex-col bg-white/90 backdrop-blur border border-slate-200 shadow-sm rounded-xl p-1 gap-1">
+                            <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-slate-100 text-slate-600" title="Phóng to" onClick={(e) => {
+                                e.stopPropagation();
+                                setTransform(t => {
+                                    const vw = viewportRef.current?.clientWidth ?? 0; const vh = viewportRef.current?.clientHeight ?? 0;
+                                    const cx = vw / 2; const cy = vh / 2;
+                                    const ns = Math.min(t.scale * 1.3, 3); const r = ns / t.scale;
+                                    return { scale: ns, x: cx - (cx - t.x) * r, y: cy - (cy - t.y) * r };
+                                });
+                            }}><ZoomIn className="h-4 w-4" /></Button>
+
+                            <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-slate-100 text-slate-600" title="Thu nhỏ" onClick={(e) => {
+                                e.stopPropagation();
+                                setTransform(t => {
+                                    const vw = viewportRef.current?.clientWidth ?? 0; const vh = viewportRef.current?.clientHeight ?? 0;
+                                    const cx = vw / 2; const cy = vh / 2;
+                                    const ns = Math.max(t.scale / 1.3, 0.15); const r = ns / t.scale;
+                                    return { scale: ns, x: cx - (cx - t.x) * r, y: cy - (cy - t.y) * r };
+                                });
+                            }}><ZoomOut className="h-4 w-4" /></Button>
+
+                            <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-slate-100 text-slate-600" title="Vừa màn hình" onClick={(e) => {
+                                e.stopPropagation();
+                                fitAll();
+                            }}><Maximize2 className="h-4 w-4" /></Button>
+                        </div>
+                    </div>
                     {loading ? (
                         <div className="flex items-center justify-center h-full">
                             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -1109,15 +1095,6 @@ export default function TreeViewPage() {
                 )}
             </div>
 
-            {/* Legend */}
-            <div className="flex gap-3 text-[10px] text-muted-foreground pt-1.5 px-1 flex-wrap">
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-blue-100 border border-blue-400" /> Nam (chính tộc)</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-pink-100 border border-pink-400" /> Nữ (chính tộc)</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-slate-100 border border-dashed border-slate-300" /> Ngoại tộc</span>
-                <span className="flex items-center gap-1"><span className="text-red-500">❤</span> Vợ chồng</span>
-                <span className="flex items-center gap-1 opacity-60"><span className="w-2.5 h-2.5 rounded-sm bg-slate-200 border border-slate-400" /> Đã mất</span>
-                <span className="ml-auto opacity-50">Cuộn để zoom • Kéo để di chuyển • Nhấn để xem</span>
-            </div>
             {/* Contribute dialog */}
             {contributePerson && (
                 <ContributeDialog
@@ -1171,31 +1148,33 @@ function CardContextMenu({ person, x, y, onViewDetail, onShowDescendants, onShow
                 {/* Actions */}
                 <div className="py-1">
                     <MenuAction icon={<User className="w-4 h-4" />} label="Xem chi tiết" desc="Mở trang cá nhân" onClick={onViewDetail} />
-                    <MenuAction icon={<ArrowDownToLine className="w-4 h-4" />} label="Hậu duệ từ đây" desc="Hiển thị cây con cháu" onClick={onShowDescendants} />
-                    <MenuAction icon={<ArrowUpFromLine className="w-4 h-4" />} label="Tổ tiên" desc="Hiển thị dòng tổ tiên" onClick={onShowAncestors} />
-                    <MenuAction icon={<Crosshair className="w-4 h-4" />} label="Căn giữa" desc="Di chuyển tới vị trí" onClick={onSetFocus} />
-                    <div className="border-t border-slate-100 my-1" />
                     <MenuAction icon={<Link className="w-4 h-4" />} label="Sao chép link hậu duệ" desc="Chia sẻ link cây con cháu" onClick={onCopyLink} />
-                    <MenuAction icon={<Eye className="w-4 h-4" />} label="Toàn cảnh" desc="Hiển thị toàn bộ cây" onClick={onShowFull} />
-                    <div className="border-t border-slate-100 my-1" />
-                    <MenuAction icon={<MessageSquarePlus className="w-4 h-4" />} label="Đóng góp thông tin" desc="Bổ sung thông tin về người này" onClick={onContribute} />
+                    <div className="border-t border-slate-100 my-1 mx-2" />
+                    <MenuAction
+                        icon={<MessageSquarePlus className="w-4 h-4" />}
+                        label="Đóng góp thông tin"
+                        desc="Bổ sung thông tin về người này"
+                        onClick={onContribute}
+                        isHighlighted
+                    />
                 </div>
             </div>
         </div>
     );
 }
 
-function MenuAction({ icon, label, desc, onClick }: { icon: React.ReactNode; label: string; desc: string; onClick: () => void }) {
+function MenuAction({ icon, label, desc, onClick, isHighlighted }: { icon: React.ReactNode; label: string; desc: string; onClick: () => void; isHighlighted?: boolean }) {
     return (
         <button
-            className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-slate-50 active:bg-slate-100
-                transition-colors text-left group"
+            className={`w-full px-3 py-2 flex items-center gap-2.5 transition-colors text-left group
+                ${isHighlighted ? 'bg-indigo-50/50 hover:bg-indigo-100/50 active:bg-indigo-200/50 mx-1 w-[calc(100%-8px)] rounded-md' : 'hover:bg-slate-50 active:bg-slate-100'}
+            `}
             onClick={onClick}
         >
-            <span className="text-slate-400 group-hover:text-blue-500 transition-colors flex-shrink-0">{icon}</span>
+            <span className={`${isHighlighted ? 'text-indigo-500' : 'text-slate-400 group-hover:text-blue-500'} transition-colors flex-shrink-0`}>{icon}</span>
             <div className="flex-1 min-w-0">
-                <p className="text-[13px] font-medium text-slate-700 group-hover:text-slate-900">{label}</p>
-                <p className="text-[10px] text-slate-400">{desc}</p>
+                <p className={`text-[13px] font-medium ${isHighlighted ? 'text-indigo-700 font-semibold' : 'text-slate-700 group-hover:text-slate-900'}`}>{label}</p>
+                <p className={`text-[10px] ${isHighlighted ? 'text-indigo-500/80' : 'text-slate-400'}`}>{desc}</p>
             </div>
         </button>
     );
@@ -1316,6 +1295,13 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
                         ${isExtraSmall ? 'text-[10px]' : 'text-[13px] '}`}>
                         {node.displayName}
                     </p>
+                    {!isExtraSmall && (
+                        <p className="text-[10px] text-slate-500 mt-0.5 leading-none">
+                            {(node.birthYear || node.deathYear)
+                                ? `${node.birthYear || '?'}-${node.deathYear ? node.deathYear : (node.isLiving ? 'nay' : '?')}`
+                                : ' '}
+                        </p>
+                    )}
                 </div>
 
                 {/* Collapse toggle */}
@@ -1368,8 +1354,8 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
                         {node.displayName}
                     </p>
                     <p className="text-[11px] text-slate-500 mt-1">
-                        {node.birthYear
-                            ? `${node.birthYear}${node.deathYear ? ` — ${node.deathYear}` : node.isLiving ? ' — nay' : ''}`
+                        {(node.birthYear || node.deathYear)
+                            ? `${node.birthYear || '?'} — ${node.deathYear ? node.deathYear : (node.isLiving ? 'nay' : '?')}`
                             : '—'}
                     </p>
                     <div className="mt-1 flex items-center gap-1.5">

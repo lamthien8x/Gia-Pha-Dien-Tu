@@ -18,12 +18,25 @@ import {
     CalendarDays,
     Menu,
     UserPlus,
+    LogOut,
+    User,
+    LogIn,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { useRouter } from 'next/navigation';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const navItems = [
     { href: '/', label: 'Cây gia phả', icon: TreePine },
@@ -51,7 +64,17 @@ function SidebarContent({ collapsed, setCollapsed, onMobileLinkClick }: {
     onMobileLinkClick?: () => void;
 }) {
     const pathname = usePathname();
-    const { isAdmin } = useAuth();
+    const router = useRouter();
+    const { isLoggedIn, profile, isAdmin, signOut } = useAuth();
+
+    const initials = profile?.display_name
+        ? profile.display_name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+        : profile?.email?.slice(0, 2).toUpperCase() || '?';
+
+    const handleSignOut = async () => {
+        await signOut();
+        router.push('/login');
+    };
 
     return (
         <>
@@ -116,6 +139,66 @@ function SidebarContent({ collapsed, setCollapsed, onMobileLinkClick }: {
                     </>
                 )}
             </nav>
+
+            {/* Auth Section */}
+            <div className="border-t p-4 flex flex-col gap-2">
+                {isLoggedIn ? (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="w-full justify-start px-2 hover:bg-accent h-auto py-2">
+                                <Avatar className="h-8 w-8 mr-2">
+                                    <AvatarFallback className="bg-primary/10 text-primary text-xs shrink-0">
+                                        {initials}
+                                    </AvatarFallback>
+                                </Avatar>
+                                {!collapsed && (
+                                    <div className="flex flex-col items-start overflow-hidden flex-1">
+                                        <span className="text-sm font-medium truncate w-[140px] text-left">{profile?.display_name || 'Thành viên'}</span>
+                                        <span className="text-xs text-muted-foreground truncate w-[140px] text-left">{profile?.email}</span>
+                                    </div>
+                                )}
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent className="w-56" align="end" side="right" forceMount>
+                            <DropdownMenuLabel className="font-normal">
+                                <div className="flex flex-col space-y-1">
+                                    <p className="text-sm font-medium leading-none">
+                                        {profile?.display_name || 'Thành viên'}
+                                    </p>
+                                    <p className="text-xs leading-none text-muted-foreground">
+                                        {profile?.email}
+                                    </p>
+                                    {isAdmin && (
+                                        <span className="text-[10px] font-medium text-emerald-600 bg-emerald-50 rounded px-1.5 py-0.5 w-fit mt-1">
+                                            Quản trị viên
+                                        </span>
+                                    )}
+                                </div>
+                            </DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem>
+                                <User className="mr-2 h-4 w-4" />
+                                Hồ sơ cá nhân
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive font-medium" onClick={handleSignOut}>
+                                <LogOut className="mr-2 h-4 w-4" />
+                                Đăng xuất
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                ) : (
+                    <Button
+                        variant="default"
+                        className={cn("w-full transition-all", collapsed ? "h-9 w-9 p-0 bg-emerald-600 hover:bg-emerald-700 mx-auto" : "bg-emerald-600 hover:bg-emerald-700 text-white")}
+                        onClick={() => router.push('/login')}
+                        title={collapsed ? "Đăng nhập" : undefined}
+                    >
+                        <LogIn className={cn("h-4 w-4 shrink-0", !collapsed && "mr-2")} />
+                        {!collapsed && "Đăng nhập phần mềm"}
+                    </Button>
+                )}
+            </div>
 
             {/* Contact info */}
             {!collapsed && (

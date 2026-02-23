@@ -26,6 +26,7 @@ const FIELD_SECTIONS: { title: string; icon: React.ReactNode; fields: FieldDef[]
             { key: 'display_name', label: 'Họ tên đầy đủ', type: 'text', placeholder: 'VD: Hồ Văn An' },
             { key: 'nick_name', label: 'Tên thường gọi', type: 'text', placeholder: 'VD: Chú Hai, Bác Ba...' },
             { key: 'gender', label: 'Giới tính', type: 'select', options: [{ value: '1', label: 'Nam' }, { value: '2', label: 'Nữ' }] },
+            { key: 'is_living', label: 'Tình trạng', type: 'select', options: [{ value: 'true', label: 'Còn sống' }, { value: 'false', label: 'Đã mất' }] },
             { key: 'birth_year', label: 'Năm sinh', type: 'number', placeholder: 'VD: 1950' },
             { key: 'birth_date', label: 'Ngày sinh (đầy đủ)', type: 'text', placeholder: 'VD: 15/03/1950' },
             { key: 'birth_place', label: 'Nơi sinh', type: 'text', placeholder: 'VD: Quảng Bình' },

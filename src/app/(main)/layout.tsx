@@ -11,7 +11,7 @@ export default function MainLayout({
             <Sidebar />
             <div className="flex flex-1 min-w-0 flex-col md:ml-0">
                 <Header />
-                <main className="flex-1 min-w-0 overflow-hidden p-4 pt-16 md:pt-4 lg:p-6">{children}</main>
+                <main className="relative flex-1 min-w-0 overflow-hidden p-4 pt-16 md:pt-4 lg:p-6">{children}</main>
             </div>
         </div>
     );
