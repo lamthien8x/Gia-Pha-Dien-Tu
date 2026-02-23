@@ -13,6 +13,7 @@
 export interface TreeNode {
     handle: string;
     displayName: string;
+    avatarUrl?: string;
     gender: number;
     generation: number;
     birthYear?: number;

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS people (
     gramps_id TEXT,
     gender INT NOT NULL DEFAULT 1,           -- 1=Nam, 2=Nữ
     display_name TEXT NOT NULL,
+    avatar_url TEXT,
     surname TEXT,
     first_name TEXT,
     generation INT DEFAULT 1,
@@ -94,11 +95,16 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- ⚠️ ĐỔI EMAIL ADMIN: thay 'your-admin@example.com' bằng email admin thật
 -- Hoặc dùng câu SQL bên dưới sau khi đăng ký:
 --   UPDATE profiles SET role = 'admin' WHERE email = 'your-real-email@example.com';
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER AS $$
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
     user_email TEXT;
     user_display_name TEXT;
+    existing_profile_id UUID;
 BEGIN
     user_email := COALESCE(NEW.email, NEW.raw_user_meta_data->>'email', '');
     user_display_name := COALESCE(
@@ -106,7 +112,14 @@ BEGIN
         split_part(user_email, '@', 1),
         ''
     );
+
     IF user_email != '' THEN
+        -- Xóa profile mồ côi nếu email đã tồn tại với user ID khác
+        SELECT id INTO existing_profile_id FROM profiles WHERE email = user_email;
+        IF existing_profile_id IS NOT NULL AND existing_profile_id != NEW.id THEN
+            DELETE FROM profiles WHERE id = existing_profile_id;
+        END IF;
+
         INSERT INTO profiles (id, email, display_name, role, status)
         VALUES (
             NEW.id,
@@ -115,13 +128,12 @@ BEGIN
             CASE WHEN user_email = 'lamthien8x@gmail.com' THEN 'admin' ELSE 'member' END,
             'active'
         )
-        ON CONFLICT (email) DO UPDATE
-            SET id = NEW.id,
-                display_name = EXCLUDED.display_name;
+        ON CONFLICT (id) DO NOTHING;
     END IF;
+
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
@@ -308,7 +320,8 @@ CREATE POLICY "admin can delete families" ON families
 -- Profiles: public read, update own or admin
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "anyone can read profiles" ON profiles FOR SELECT USING (true);
-CREATE POLICY "users can insert own profile" ON profiles FOR INSERT WITH CHECK (auth.uid() = id);
+-- Cho phép trigger (SECURITY DEFINER) và service_role insert profile
+CREATE POLICY "service can insert profiles" ON profiles FOR INSERT WITH CHECK (true);
 CREATE POLICY "users or admin can update profile" ON profiles
     FOR UPDATE USING (auth.uid() = id OR EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
@@ -389,9 +402,8 @@ CREATE POLICY "owner or admin can delete events" ON events
 -- Event RSVPs: authenticated users, manage own RSVPs
 ALTER TABLE event_rsvps ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "authenticated can read rsvps" ON event_rsvps FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "authenticated can upsert rsvp" ON event_rsvps FOR INSERT
-    WITH CHECK (auth.uid() = user_id)
-    ON CONFLICT (event_id, user_id) DO UPDATE SET status = EXCLUDED.status;
+CREATE POLICY "authenticated can insert rsvp" ON event_rsvps FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "users can update own rsvp" ON event_rsvps
     FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "users can delete own rsvp" ON event_rsvps

@@ -30,6 +30,7 @@ interface Contribution {
 
 // Fields that map directly to people table columns
 const PEOPLE_FIELD_MAP: Record<string, string> = {
+    avatar_url: 'avatar_url',
     display_name: 'display_name',
     surname: 'surname',
     first_name: 'first_name',
@@ -274,84 +275,95 @@ export default function AdminEditsPage() {
                                     </div>
                                 </div>
 
-                                {/* Contributions list */}
+                                {/* Contributions list as a compact table */}
                                 {isExpanded && (
-                                    <div className="border-t divide-y">
-                                        {items.map(c => (
-                                            <div key={c.id} className="px-4 py-3 flex items-start gap-3">
-                                                <div className="flex-1 min-w-0 space-y-1.5">
-                                                    {/* Field + status */}
-                                                    <div className="flex items-center gap-2 flex-wrap">
-                                                        <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${STATUS_COLORS[c.status]}`}>
-                                                            {STATUS_LABELS[c.status]}
-                                                        </span>
-                                                        <span className="text-xs font-medium text-primary">
-                                                            {c.field_label || c.field_name}
-                                                        </span>
-                                                        {!PEOPLE_FIELD_MAP[c.field_name] && (
-                                                            <Badge variant="outline" className="text-[9px] text-orange-600 border-orange-300">
-                                                                Cần xử lý thủ công
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Value */}
-                                                    <div className="bg-muted/40 rounded-lg px-3 py-2">
-                                                        <p className="text-sm font-medium break-words">{c.new_value}</p>
-                                                        {c.note && (
-                                                            <p className="text-xs text-muted-foreground mt-1 italic">📝 {c.note}</p>
-                                                        )}
-                                                    </div>
-
-                                                    {/* Meta */}
-                                                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground flex-wrap">
-                                                        <span>📧 {c.author_email}</span>
-                                                        <span>·</span>
-                                                        <span>{new Date(c.created_at).toLocaleString('vi-VN')}</span>
-                                                        {c.admin_note && (
-                                                            <>
-                                                                <span>·</span>
-                                                                <span className="text-blue-600">💬 {c.admin_note}</span>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Actions */}
-                                                {c.status === 'pending' && (
-                                                    <div className="flex flex-col gap-1.5 flex-shrink-0 items-end">
-                                                        <Input
-                                                            placeholder="Ghi chú (tuỳ chọn)..."
-                                                            className="text-xs h-7 w-40"
-                                                            value={adminNotes[c.id] || ''}
-                                                            onChange={e => setAdminNotes(prev => ({ ...prev, [c.id]: e.target.value }))}
-                                                        />
-                                                        <div className="flex gap-1">
-                                                            <Button
-                                                                size="sm"
-                                                                className="h-7 text-xs px-2.5 bg-green-600 hover:bg-green-700 gap-1"
-                                                                disabled={processingId === c.id}
-                                                                onClick={() => handleApprove(c)}
-                                                            >
-                                                                {processingId === c.id
-                                                                    ? <RefreshCw className="h-3 w-3 animate-spin" />
-                                                                    : <Check className="h-3 w-3" />
-                                                                }
-                                                                Duyệt & lưu
-                                                            </Button>
-                                                            <Button
-                                                                size="sm" variant="outline"
-                                                                className="h-7 text-xs px-2.5 text-red-600 border-red-200 hover:bg-red-50 gap-1"
-                                                                disabled={processingId === c.id}
-                                                                onClick={() => handleReject(c.id)}
-                                                            >
-                                                                <X className="h-3 w-3" /> Từ chối
-                                                            </Button>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ))}
+                                    <div className="border-t overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="text-xs text-muted-foreground bg-muted/30">
+                                                <tr>
+                                                    <th className="px-4 py-2 font-medium">Trường thông tin</th>
+                                                    <th className="px-4 py-2 font-medium">Giá trị đề xuất</th>
+                                                    <th className="px-4 py-2 font-medium text-right w-[200px]">Thao tác</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y">
+                                                {items.map(c => (
+                                                    <tr key={c.id} className="hover:bg-muted/10 transition-colors">
+                                                        <td className="px-4 py-3 align-top min-w-[140px]">
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className="font-medium text-primary">
+                                                                    {c.field_label || c.field_name}
+                                                                </span>
+                                                                <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded-md border ${STATUS_COLORS[c.status]}`}>
+                                                                    {STATUS_LABELS[c.status]}
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-[10px] text-muted-foreground space-y-0.5">
+                                                                <p>Bởi: {c.author_email || 'Khách'}</p>
+                                                                <p>{new Date(c.created_at).toLocaleString('vi-VN')}</p>
+                                                                {!PEOPLE_FIELD_MAP[c.field_name] && (
+                                                                    <p className="text-orange-600 font-medium">⚠️ Cần xử lý thủ công</p>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 align-top">
+                                                            <div className="bg-muted/30 rounded border px-3 py-2">
+                                                                {c.field_name === 'avatar_url' ? (
+                                                                    <div className="w-16 h-16 rounded overflow-hidden border">
+                                                                        <img src={c.new_value} alt="Avatar preview" className="object-cover w-full h-full" />
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="font-medium whitespace-pre-wrap break-all">{c.new_value}</p>
+                                                                )}
+                                                                {c.note && <p className="text-xs text-muted-foreground mt-1.5 pt-1.5 border-t italic">Ghi chú: {c.note}</p>}
+                                                            </div>
+                                                            {(c.admin_note || c.status !== 'pending') && (
+                                                                <div className="mt-2 text-[11px] space-y-1">
+                                                                    {c.admin_note && <p className="text-blue-600">↳ Admin phản hồi: {c.admin_note}</p>}
+                                                                    {c.status !== 'pending' && <p className="text-muted-foreground">↳ Đã xử lý ({(c.status === 'approved' ? 'Duyệt' : 'Từ chối')})</p>}
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-4 py-3 align-top text-right">
+                                                            {c.status === 'pending' ? (
+                                                                <div className="flex flex-col gap-1.5 items-end">
+                                                                    <Input
+                                                                        placeholder="Ghi chú (tuỳ chọn)..."
+                                                                        className="text-[11px] h-7 w-full max-w-[180px]"
+                                                                        value={adminNotes[c.id] || ''}
+                                                                        onChange={e => setAdminNotes(prev => ({ ...prev, [c.id]: e.target.value }))}
+                                                                    />
+                                                                    <div className="flex gap-1.5 w-full justify-end">
+                                                                        <Button
+                                                                            size="sm" variant="outline"
+                                                                            className="h-7 text-xs px-2 text-red-600 border-red-200 hover:bg-red-50 flex-1 max-w-[80px]"
+                                                                            disabled={processingId === c.id}
+                                                                            onClick={() => handleReject(c.id)}
+                                                                        >
+                                                                            <X className="h-3 w-3 mr-1" /> Huỷ
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            className="h-7 text-xs px-2 bg-green-600 hover:bg-green-700 flex-1 max-w-[90px]"
+                                                                            disabled={processingId === c.id}
+                                                                            onClick={() => handleApprove(c)}
+                                                                        >
+                                                                            {processingId === c.id ? <RefreshCw className="h-3 w-3 animate-spin mr-1" /> : <Check className="h-3 w-3 mr-1" />}
+                                                                            Duyệt
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                                                                    {c.status === 'approved' ? <CheckCheck className="h-3 w-3 text-green-500" /> : <X className="h-3 w-3 text-red-400" />}
+                                                                    Đã xử lý
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
                                     </div>
                                 )}
                             </Card>

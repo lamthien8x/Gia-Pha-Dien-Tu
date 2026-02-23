@@ -58,7 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const ensureProfile = useCallback(async (u: User) => {
-        // Create profile if it doesn't exist (handles signup)
+        // Profile is normally auto-created by the handle_new_user() trigger.
+        // This is a safety-net: upsert so we never fail on duplicates.
         const { data: existing } = await supabase
             .from('profiles')
             .select('id')
@@ -66,12 +67,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .maybeSingle();
 
         if (!existing) {
-            await supabase.from('profiles').insert({
+            await supabase.from('profiles').upsert({
                 id: u.id,
                 email: u.email || '',
                 display_name: u.user_metadata?.display_name || u.email?.split('@')[0] || '',
                 role: 'member',
-            });
+            }, { onConflict: 'id' });
         }
         await fetchProfile(u.id);
     }, [fetchProfile]);

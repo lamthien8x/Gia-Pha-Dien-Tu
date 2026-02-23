@@ -88,15 +88,12 @@ function RegisterContent() {
                 return;
             }
 
-            // Create profile
-            if (authData.user) {
-                await supabase.from('profiles').upsert({
-                    id: authData.user.id,
-                    email: data.email,
-                    display_name: data.displayName,
-                    role: userRole,
-                    status: 'active',
-                });
+            // Profile is auto-created by the handle_new_user() trigger.
+            // If invite code gave a non-default role, update it.
+            if (authData.user && userRole !== 'member') {
+                await supabase.from('profiles')
+                    .update({ role: userRole })
+                    .eq('id', authData.user.id);
             }
 
             router.push('/');

@@ -3,11 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import {
-    ArrowLeft, User, Heart, Image, FileText, History, Lock,
-    Phone, MapPin, Briefcase, GraduationCap, Tag, MessageCircle,
-    Pencil, Check, X, Save, Loader2
-} from 'lucide-react';
+import { User, Image, History, MapPin, Briefcase, Phone, MessageCircle, Heart, Lock, GitBranch, ArrowLeft, Pencil, FileText, Check, AlertCircle, Trash2, X, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -121,6 +117,7 @@ export default function PersonProfilePage() {
 
     const [person, setPerson] = useState<PersonDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [isDeleting, setIsDeleting] = useState(false);
     const [saveMsg, setSaveMsg] = useState('');
 
     useEffect(() => {
@@ -136,6 +133,7 @@ export default function PersonProfilePage() {
                     setPerson({
                         handle: row.handle as string,
                         displayName: row.display_name as string,
+                        avatarUrl: row.avatar_url as string | undefined,
                         gender: row.gender as number,
                         birthYear: row.birth_year as number | undefined,
                         deathYear: row.death_year as number | undefined,
@@ -190,6 +188,28 @@ export default function PersonProfilePage() {
         setTimeout(() => setSaveMsg(''), 2000);
     }, [person]);
 
+    const handleDelete = async () => {
+        if (!confirm('Bạn có chắc chắn muốn xoá thành viên này? Hành động này không thể hoàn tác và sẽ gỡ bỏ họ khỏi cây phả hệ.')) return;
+        setIsDeleting(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            const res = await fetch(`/api/people/${handle}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token || ''}`
+                }
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Failed to delete');
+            }
+            router.push('/tree');
+        } catch (err: any) {
+            alert('Lỗi: ' + err.message);
+            setIsDeleting(false);
+        }
+    };
+
     if (loading) return (
         <div className="flex items-center justify-center h-96">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -221,34 +241,78 @@ export default function PersonProfilePage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-start justify-between">
-                <div className="flex items-center gap-4">
-                    <Button variant="ghost" size="icon" onClick={() => router.back()}>
-                        <ArrowLeft className="h-4 w-4" />
-                    </Button>
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2 flex-wrap">
-                            {person.displayName}
-                            {person.isPrivacyFiltered && (
-                                <Badge variant="outline" className="text-amber-500 border-amber-500">
-                                    <Lock className="h-3 w-3 mr-1" />Thông tin bị giới hạn
-                                </Badge>
+            {/* Modern Header Profile */}
+            <div className="relative overflow-hidden rounded-2xl border bg-gradient-to-br from-blue-50/50 via-white to-blue-50/50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 p-6 shadow-sm">
+                <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-10"></div>
+
+                <div className="relative flex flex-col sm:flex-row gap-6 items-start sm:items-center justify-between">
+                    <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
+                        {/* Avatar */}
+                        <div className="relative">
+                            <div className="w-24 h-24 rounded-full border-4 border-white dark:border-slate-800 shadow-md overflow-hidden bg-slate-100 flex items-center justify-center shrink-0">
+                                {person.avatarUrl ? (
+                                    <img src={person.avatarUrl} alt={person.displayName} className="w-full h-full object-cover" />
+                                ) : (
+                                    <User className="w-10 h-10 text-slate-400" />
+                                )}
+                            </div>
+                            {person.isLiving ? (
+                                <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full" title="Còn sống" />
+                            ) : (
+                                <span className="absolute bottom-1 right-1 w-5 h-5 bg-slate-400 border-2 border-white rounded-full flex items-center justify-center text-white" title="Đã mất">
+                                    <span className="text-[10px] leading-none">✝</span>
+                                </span>
                             )}
-                        </h1>
-                        <p className="text-muted-foreground">
-                            {genderLabel}
-                            {person.generation ? ` • Đời thứ ${person.generation}` : ''}
-                            {person.isLiving && ' • Còn sống'}
-                        </p>
+                        </div>
+
+                        {/* Info */}
+                        <div className="space-y-1.5">
+                            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight flex items-center gap-2 flex-wrap text-slate-900 dark:text-white">
+                                {person.displayName}
+                                {person.isPrivacyFiltered && (
+                                    <Badge variant="outline" className="text-amber-500 border-amber-500 bg-amber-50 dark:bg-amber-950/50">
+                                        <Lock className="h-3 w-3 mr-1" />Bảo mật
+                                    </Badge>
+                                )}
+                            </h1>
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-medium text-slate-600 dark:text-slate-400">
+                                <span className="flex items-center gap-1.5">
+                                    <User className="w-4 h-4 text-blue-500" />
+                                    {genderLabel}
+                                </span>
+                                <span>•</span>
+                                <span className="flex items-center gap-1.5 ">
+                                    <GitBranch className="w-4 h-4 text-emerald-500" />
+                                    Đời thứ {person.generation || '?'}
+                                </span>
+                                {person.birthYear && (
+                                    <>
+                                        <span>•</span>
+                                        <span className="flex items-center gap-1.5">
+                                            Tuổi: {person.isLiving ? new Date().getFullYear() - person.birthYear : (person.deathYear ? person.deathYear - person.birthYear : '?')}
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                </div>
-                <div className="flex items-center gap-2">
-                    {saveMsg && <span className="text-sm text-green-600 font-medium">{saveMsg}</span>}
-                    {isAdmin && (
-                        <Badge variant="outline" className="text-xs gap-1 text-primary border-primary">
-                            <Pencil className="h-3 w-3" /> Chế độ Admin — hover để sửa
-                        </Badge>
-                    )}
+
+                    <div className="flex flex-col items-end gap-2 whitespace-nowrap">
+                        <Button variant="outline" size="sm" onClick={() => router.back()} className="gap-1.5 shadow-sm">
+                            <ArrowLeft className="h-4 w-4" /> Quay lại Cây
+                        </Button>
+                        {isAdmin && (
+                            <Button variant="destructive" size="sm" onClick={handleDelete} disabled={isDeleting} className="gap-1.5 shadow-sm bg-red-500 hover:bg-red-600">
+                                <Trash2 className="h-4 w-4" /> {isDeleting ? 'Đang xoá...' : 'Xoá thành viên'}
+                            </Button>
+                        )}
+                        {saveMsg && <span className="text-xs text-green-600 font-medium px-2 py-1 bg-green-50 rounded-md">{saveMsg}</span>}
+                        {isAdmin && (
+                            <Badge variant="secondary" className="text-[10px] font-medium text-blue-600 bg-blue-100/50 tracking-wide mt-1">
+                                <Pencil className="h-3 w-3 mr-1" /> Bấm để sửa
+                            </Badge>
+                        )}
+                    </div>
                 </div>
             </div>
 
@@ -279,8 +343,6 @@ export default function PersonProfilePage() {
                         </CardHeader>
                         <CardContent className="grid gap-4 md:grid-cols-2">
                             <Field label="Họ tên" value={person.displayName} fieldKey="display_name" />
-                            <Field label="Họ" value={person.surname} fieldKey="surname" />
-                            <Field label="Tên" value={person.firstName} fieldKey="first_name" />
                             <InfoRow label="Giới tính" value={genderLabel} />
                             {person.nickName && <Field label="Tên thường gọi" value={person.nickName} fieldKey="nick_name" />}
                             <Field label="Năm sinh" value={person.birthYear} fieldKey="birth_year" type="number" />

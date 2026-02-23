@@ -122,11 +122,11 @@ function SidebarContent({ collapsed, setCollapsed, onMobileLinkClick }: {
             {!collapsed && (
                 <div className="border-t px-4 py-3">
                     <p className="text-xs text-muted-foreground leading-relaxed">
-                        Để thiết lập <span className="font-semibold text-foreground">gia phả điện tử</span> riêng cho dòng họ, truy cập được từ bất kì đâu, vui lòng liên hệ
+                        Trang gia phả do <span className="font-semibold text-foreground">con/cháu</span> mới làm nên có thể còn nhiều sai sót. Các ông, bác, cô chú có góp ý gì xin vui lòng liên hệ cháu:
                         <br />
-                        <span className="font-semibold text-foreground">📞 09792 35341 - Hồ Văn Công</span>
+                        <span className="font-semibold text-foreground">📞 09792 35341 — Hồ Văn Công</span>
                         <br />
-                        <span className="text-[10px] opacity-70">để nhận báo giá.</span>
+                        <span className="text-[10px] opacity-70">Cháu xin cảm ơn ạ! 🙏</span>
                     </p>
                 </div>
             )}
@@ -177,7 +177,7 @@ export function Sidebar() {
                 <SheetContent side="left" className="w-72 p-0">
                     <SheetTitle className="sr-only">Menu điều hướng</SheetTitle>
                     <aside className="flex flex-col h-full">
-                        <SidebarContent collapsed={false} setCollapsed={() => {}} onMobileLinkClick={handleMobileLinkClick} />
+                        <SidebarContent collapsed={false} setCollapsed={() => { }} onMobileLinkClick={handleMobileLinkClick} />
                     </aside>
                 </SheetContent>
             </Sheet>

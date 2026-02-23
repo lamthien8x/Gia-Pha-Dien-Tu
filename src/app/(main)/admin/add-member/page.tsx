@@ -109,8 +109,15 @@ export default function AddMemberPage() {
         setLoading(true); setError(''); setSuccess('');
 
         try {
+            const parsedGen = parseInt(generation);
+            let genNum = isNaN(parsedGen) ? 1 : parsedGen;
+            let shiftAmount = 0;
             const handle = generateHandle(displayName);
-            const genNum = parseInt(generation) || 1;
+
+            if (mode === 'ancestor' && genNum <= 0) {
+                shiftAmount = 1 - genNum; // e.g., genNum=0 → shiftAmount=1; genNum=-1 → shiftAmount=2
+                genNum = 1;
+            }
 
             // 1. Insert the new person
             const { error: personError } = await supabase.from('people').insert({
@@ -185,7 +192,27 @@ export default function AddMemberPage() {
                 }
             }
 
-            setSuccess(`✅ Đã thêm "${displayName}" thành công! (Đời ${genNum})`);
+            if (shiftAmount > 0) {
+                const { data: { session } } = await supabase.auth.getSession();
+                const res = await fetch('/api/people/shift-generations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session?.access_token || ''}`
+                    },
+                    body: JSON.stringify({
+                        amount: shiftAmount,
+                        excludeHandle: handle
+                    }),
+                });
+
+                if (!res.ok) {
+                    console.error('Failed to shift generations, please run SQL manually', await res.text());
+                    // We don't throw to avoid rolling back person insertion, since that succeeded
+                }
+            }
+
+            setSuccess(`✅ Đã thêm "${displayName}" thành công! (Đời ${genNum})${shiftAmount > 0 ? ` - Đã tự động dời các đời khác xuống ${shiftAmount} bậc` : ''}`);
             resetForm();
             await fetchPeople();
             setTimeout(() => setSuccess(''), 5000);
@@ -381,8 +408,13 @@ export default function AddMemberPage() {
                                     ))}
                                 </select>
                                 {selectedChild && (
-                                    <p className="text-xs text-muted-foreground">
-                                        💡 Đời của người mới sẽ được đặt = đời của {allPeople.find(p => p.handle === selectedChild)?.display_name} - 1
+                                    <p className="text-xs text-muted-foreground mt-2">
+                                        💡 Đời của người mới sẽ là <strong className="text-primary">{Math.max(1, (allPeople.find(p => p.handle === selectedChild)?.generation || 0) - 1)}</strong>.
+                                        {((allPeople.find(p => p.handle === selectedChild)?.generation || 0) - 1) <= 0 && (
+                                            <span className="block mt-1 text-amber-600">
+                                                Lưu ý: Vì người con đang ở đời 1, đời của người mới sẽ thành đời 1, và toàn bộ dòng họ sẽ tự động lùi xuống {(1 - ((allPeople.find(p => p.handle === selectedChild)?.generation || 0) - 1))} đời để đảm bảo thuỷ tổ luôn ở đời 1.
+                                            </span>
+                                        )}
                                     </p>
                                 )}
                             </div>

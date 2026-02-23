@@ -1,9 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Send, MessageSquarePlus, ChevronDown, ChevronUp, User, Phone, MapPin, Briefcase, FileText, Check } from 'lucide-react';
+import { X, Send, MessageSquarePlus, User, Phone, MapPin, Briefcase, FileText, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/components/auth-provider';
 
@@ -11,7 +12,7 @@ import { useAuth } from '@/components/auth-provider';
 interface FieldDef {
     key: string;
     label: string;
-    type: 'text' | 'number' | 'textarea' | 'date' | 'select';
+    type: 'text' | 'number' | 'textarea' | 'date' | 'select' | 'image';
     placeholder?: string;
     options?: { value: string; label: string }[];
 }
@@ -21,9 +22,8 @@ const FIELD_SECTIONS: { title: string; icon: React.ReactNode; fields: FieldDef[]
         title: 'Thông tin cá nhân',
         icon: <User className="w-3.5 h-3.5" />,
         fields: [
+            { key: 'avatar_url', label: 'Hình ảnh đại diện', type: 'image' },
             { key: 'display_name', label: 'Họ tên đầy đủ', type: 'text', placeholder: 'VD: Hồ Văn An' },
-            { key: 'surname', label: 'Họ', type: 'text', placeholder: 'VD: Hồ' },
-            { key: 'first_name', label: 'Tên', type: 'text', placeholder: 'VD: Văn An' },
             { key: 'nick_name', label: 'Tên thường gọi', type: 'text', placeholder: 'VD: Chú Hai, Bác Ba...' },
             { key: 'gender', label: 'Giới tính', type: 'select', options: [{ value: '1', label: 'Nam' }, { value: '2', label: 'Nữ' }] },
             { key: 'birth_year', label: 'Năm sinh', type: 'number', placeholder: 'VD: 1950' },
@@ -86,18 +86,11 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
 
     const [values, setValues] = useState<FormValues>({});
     const [note, setNote] = useState('');
+    const [contributorContact, setContributorContact] = useState('');
     const [sending, setSending] = useState(false);
     const [sent, setSent] = useState(false);
     const [error, setError] = useState('');
-    const [openSections, setOpenSections] = useState<Set<number>>(new Set([0]));
-
-    const toggleSection = (i: number) => {
-        setOpenSections(prev => {
-            const next = new Set(prev);
-            next.has(i) ? next.delete(i) : next.add(i);
-            return next;
-        });
-    };
+    const [uploadingImage, setUploadingImage] = useState(false);
 
     const setValue = (key: string, val: string) => {
         setValues(prev => ({ ...prev, [key]: val }));
@@ -105,9 +98,32 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
 
     const filledCount = Object.values(values).filter(v => v.trim()).length;
 
+    const handleImageUpload = async (key: string, file: File) => {
+        if (!file) return;
+        setUploadingImage(true);
+        setError('');
+
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await fetch('/api/contributions/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.error || 'Lỗi upload ảnh');
+            setValue(key, data.publicUrl);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Không thể tải ảnh lên');
+        } finally {
+            setUploadingImage(false);
+        }
+    };
+
     const handleSubmit = async () => {
         if (filledCount === 0) { setError('Vui lòng điền ít nhất một trường thông tin'); return; }
-        if (!isLoggedIn || !user) { setError('Bạn cần đăng nhập để đóng góp'); return; }
 
         setSending(true);
         setError('');
@@ -118,8 +134,8 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
             .map(([key, val]) => {
                 const field = FIELD_SECTIONS.flatMap(s => s.fields).find(f => f.key === key);
                 return {
-                    author_id: user.id,
-                    author_email: profile?.email || user.email || '',
+                    author_id: user?.id || null, // null for anonymous
+                    author_email: profile?.email || user?.email || contributorContact.trim() || 'anonymous',
                     person_handle: personHandle,
                     person_name: personName,
                     field_name: key,
@@ -131,13 +147,20 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
                 };
             });
 
-        const { error: insertError } = await supabase.from('contributions').insert(rows);
-        setSending(false);
+        try {
+            const res = await fetch('/api/contributions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows })
+            });
+            const data = await res.json();
 
-        if (insertError) {
-            setError(insertError.message);
-        } else {
+            if (!res.ok) throw new Error(data.error || 'Failed to submit contributions');
             setSent(true);
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Unknown error occurred');
+        } finally {
+            setSending(false);
         }
     };
 
@@ -188,7 +211,7 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
                             {/* Login warning */}
                             {!isLoggedIn && (
                                 <div className="rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 p-3 text-sm text-amber-700 dark:text-amber-400">
-                                    ⚠️ Bạn cần <a href="/login" className="underline font-medium">đăng nhập</a> để gửi đóng góp. Thông tin bạn điền sẽ được lưu lại.
+                                    💡 Bạn đang đóng góp dưới chế độ <strong>Khách vãng lai</strong>. Nếu có thể, hãy nhập tên/liên hệ ở cuối form để Admin dễ xác minh.
                                 </div>
                             )}
 
@@ -200,36 +223,36 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
                                 Điền vào các trường bạn biết. Bạn <strong>không cần điền hết</strong> — mỗi thông tin đều có giá trị. Admin sẽ xem xét và áp dụng.
                             </p>
 
-                            {/* Sections */}
-                            {FIELD_SECTIONS.map((section, si) => {
-                                const isOpen = openSections.has(si);
-                                const filledInSection = section.fields.filter(f => values[f.key]?.trim()).length;
-                                return (
-                                    <div key={si} className="border rounded-xl overflow-hidden">
-                                        {/* Section header */}
-                                        <button
-                                            type="button"
-                                            onClick={() => toggleSection(si)}
-                                            className="w-full flex items-center justify-between px-4 py-3 bg-muted/40 hover:bg-muted/70 transition-colors text-left"
-                                        >
-                                            <span className="flex items-center gap-2 font-medium text-sm">
-                                                <span className="text-muted-foreground">{section.icon}</span>
+                            {/* Tabs layout */}
+                            <Tabs defaultValue={FIELD_SECTIONS[0].title} className="w-full">
+                                <TabsList className="w-full flex justify-start overflow-x-auto overflow-y-hidden rounded-xl bg-slate-100/50 dark:bg-slate-800/50 p-1 mb-4 hide-scrollbar">
+                                    {FIELD_SECTIONS.map((section, si) => {
+                                        const filledInSection = section.fields.filter(f => values[f.key]?.trim()).length;
+                                        return (
+                                            <TabsTrigger
+                                                key={si}
+                                                value={section.title}
+                                                className="flex items-center gap-1.5 whitespace-nowrap px-4 py-2 text-sm font-medium rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm data-[state=active]:text-blue-700 transition-all dark:data-[state=active]:bg-slate-900 dark:data-[state=active]:text-blue-400"
+                                            >
+                                                {section.icon}
                                                 {section.title}
                                                 {filledInSection > 0 && (
-                                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                                                    <span className="ml-1 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 w-4 h-4 rounded-full flex items-center justify-center">
                                                         {filledInSection}
                                                     </span>
                                                 )}
-                                            </span>
-                                            {isOpen
-                                                ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                                                : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                                            }
-                                        </button>
+                                            </TabsTrigger>
+                                        );
+                                    })}
+                                </TabsList>
 
-                                        {/* Section fields */}
-                                        {isOpen && (
-                                            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {FIELD_SECTIONS.map((section, si) => (
+                                    <TabsContent key={si} value={section.title} className="mt-0 outline-none animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                        <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-sm">
+                                            <h4 className="text-base font-semibold mb-4 flex items-center gap-2 text-slate-800 dark:text-slate-200">
+                                                {section.icon} {section.title}
+                                            </h4>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                                 {section.fields.map(field => (
                                                     <div key={field.key} className={field.type === 'textarea' ? 'sm:col-span-2' : ''}>
                                                         <label className="block text-xs font-medium text-muted-foreground mb-1">
@@ -254,6 +277,24 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
                                                                     <option key={o.value} value={o.value}>{o.label}</option>
                                                                 ))}
                                                             </select>
+                                                        ) : field.type === 'image' ? (
+                                                            <div className="flex flex-col gap-2">
+                                                                <input
+                                                                    type="file"
+                                                                    accept="image/*"
+                                                                    onChange={e => {
+                                                                        const file = e.target.files?.[0];
+                                                                        if (file) handleImageUpload(field.key, file);
+                                                                    }}
+                                                                    className="text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50"
+                                                                    disabled={uploadingImage}
+                                                                />
+                                                                {values[field.key] && (
+                                                                    <div className="relative w-16 h-16 rounded-xl overflow-hidden border">
+                                                                        <img src={values[field.key]} alt="Preview" className="object-cover w-full h-full" />
+                                                                    </div>
+                                                                )}
+                                                            </div>
                                                         ) : (
                                                             <Input
                                                                 type={field.type}
@@ -266,22 +307,37 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
                                                     </div>
                                                 ))}
                                             </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
+                                        </div>
+                                    </TabsContent>
+                                ))}
+                            </Tabs>
 
                             {/* Global note */}
-                            <div className="space-y-1.5">
-                                <label className="text-xs font-medium text-muted-foreground">
-                                    Nguồn / Ghi chú chung <span className="font-normal">(tuỳ chọn)</span>
-                                </label>
-                                <Input
-                                    value={note}
-                                    onChange={e => setNote(e.target.value)}
-                                    placeholder="VD: Theo lời kể của bác Hai, theo gia phả tộc Hồ..."
-                                    className="text-sm"
-                                />
+                            <div className="space-y-4 pt-2">
+                                {!isLoggedIn && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-xs font-medium text-muted-foreground">
+                                            Họ tên / SĐT của bạn <span className="text-amber-600 font-normal">(Rất hữu ích để xác minh)</span>
+                                        </label>
+                                        <Input
+                                            value={contributorContact}
+                                            onChange={e => setContributorContact(e.target.value)}
+                                            placeholder="VD: Nguyễn Văn A - 0901234567"
+                                            className="text-sm bg-amber-50/50 dark:bg-amber-950/20 border-amber-200"
+                                        />
+                                    </div>
+                                )}
+                                <div className="space-y-1.5">
+                                    <label className="text-xs font-medium text-muted-foreground">
+                                        Nguồn / Ghi chú chung <span className="font-normal">(tuỳ chọn)</span>
+                                    </label>
+                                    <Input
+                                        value={note}
+                                        onChange={e => setNote(e.target.value)}
+                                        placeholder="VD: Theo lời kể của bác Hai, theo gia phả tộc Hồ..."
+                                        className="text-sm"
+                                    />
+                                </div>
                             </div>
                         </div>
 
@@ -297,7 +353,7 @@ export function ContributeDialog({ personHandle, personName, onClose }: Contribu
                                 <Button variant="outline" onClick={onClose} size="sm">Huỷ</Button>
                                 <Button
                                     onClick={handleSubmit}
-                                    disabled={sending || !isLoggedIn || filledCount === 0}
+                                    disabled={sending || uploadingImage || filledCount === 0}
                                     size="sm"
                                     className="gap-1.5"
                                 >

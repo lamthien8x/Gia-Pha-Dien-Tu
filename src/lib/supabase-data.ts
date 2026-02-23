@@ -13,6 +13,7 @@ function dbRowToTreeNode(row: Record<string, unknown>): TreeNode {
     return {
         handle: row.handle as string,
         displayName: row.display_name as string,
+        avatarUrl: row.avatar_url as string | undefined,
         gender: row.gender as number,
         birthYear: row.birth_year as number | undefined,
         deathYear: row.death_year as number | undefined,
@@ -40,7 +41,7 @@ function dbRowToTreeFamily(row: Record<string, unknown>): TreeFamily {
 export async function fetchPeople(): Promise<TreeNode[]> {
     const { data, error } = await supabase
         .from('people')
-        .select('handle, display_name, gender, birth_year, death_year, generation, is_living, is_privacy_filtered, is_patrilineal, families, parent_families')
+        .select('handle, display_name, avatar_url, gender, birth_year, death_year, generation, is_living, is_privacy_filtered, is_patrilineal, families, parent_families')
         .order('generation')
         .order('handle');
 

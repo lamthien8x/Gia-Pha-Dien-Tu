@@ -23,13 +23,14 @@ async function fetchApi<T>(
             },
         });
 
-        const data = await response.json();
+        const json = await response.json();
 
         if (!response.ok) {
-            return { error: data.error || 'Request failed' };
+            return { error: json.error || 'Request failed' };
         }
 
-        return { data };
+        // Return json.data mapped to data, or the raw json if there's no nested data key
+        return { data: json.data !== undefined ? json.data : json };
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         return { error: message };
@@ -134,6 +135,76 @@ export const postsApi = {
     delete: async (postId: string) => {
         return fetchApi(`/posts/${postId}`, {
             method: 'DELETE',
+        });
+    },
+};
+
+// ==================== PEOPLE API ====================
+
+export const peopleApi = {
+    // Lấy danh sách people
+    list: async (filters?: {
+        generation?: number;
+        surname?: string;
+        is_living?: boolean;
+    }) => {
+        const params = new URLSearchParams();
+        if (filters?.generation) params.append('generation', filters.generation.toString());
+        if (filters?.surname) params.append('surname', filters.surname);
+        if (filters?.is_living !== undefined) params.append('is_living', filters.is_living.toString());
+        const query = params.toString() ? `?${params}` : '';
+        return fetchApi<any[]>(`/people${query}`);
+    },
+
+    // Lấy chi tiết person
+    get: async (handle: string) => {
+        return fetchApi<any>(`/people/${handle}`);
+    },
+
+    // Tạo person mới
+    create: async (personData: {
+        handle: string;
+        display_name: string;
+        gender: number;
+        generation: number;
+        surname?: string;
+        first_name?: string;
+        birth_year?: number;
+        death_year?: number;
+        is_living?: boolean;
+        phone?: string;
+        email?: string;
+        current_address?: string;
+        hometown?: string;
+        occupation?: string;
+        notes?: string;
+    }) => {
+        return fetchApi('/people', {
+            method: 'POST',
+            body: JSON.stringify(personData),
+        });
+    },
+
+    // Cập nhật person
+    update: async (handle: string, updateData: Record<string, any>) => {
+        return fetchApi(`/people/${handle}`, {
+            method: 'PATCH',
+            body: JSON.stringify(updateData),
+        });
+    },
+
+    // Xóa person
+    delete: async (handle: string) => {
+        return fetchApi(`/people/${handle}`, {
+            method: 'DELETE',
+        });
+    },
+
+    // Dịch chuyển thế hệ
+    shiftGenerations: async (amount: number) => {
+        return fetchApi('/people/shift-generations', {
+            method: 'POST',
+            body: JSON.stringify({ amount }),
         });
     },
 };

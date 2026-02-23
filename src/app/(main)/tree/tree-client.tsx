@@ -1299,9 +1299,13 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
                 onClick={(e) => { e.stopPropagation(); onClick(node.handle, x + CARD_W, y + CARD_H / 2); }}
             >
                 <div className="px-2 py-1.5 h-full flex items-center gap-2">
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center overflow-hidden
                         font-bold text-[9px] shadow-sm ring-1 ring-black/5 ${avatarBg} flex-shrink-0`}>
-                        {initials}
+                        {node.avatarUrl ? (
+                            <img src={node.avatarUrl} alt={node.displayName} className="w-full h-full object-cover" />
+                        ) : (
+                            initials
+                        )}
                     </div>
                     <div className="flex-1 min-w-0">
                         <p className="font-semibold text-[10px] leading-tight text-slate-800 truncate">{node.displayName}</p>
@@ -1338,9 +1342,13 @@ function PersonCard({ item, isHighlighted, isFocused, isHovered, isSelected, zoo
             <div className="px-2.5 py-2 h-full flex items-center gap-2.5">
                 {/* Avatar */}
                 <div className="relative flex-shrink-0">
-                    <div className={`w-11 h-11 rounded-full flex items-center justify-center
+                    <div className={`w-11 h-11 rounded-full flex items-center justify-center overflow-hidden
                         font-bold text-sm shadow-sm ring-1 ring-black/5 ${avatarBg} ${isDead ? 'opacity-60' : ''}`}>
-                        {initials}
+                        {node.avatarUrl ? (
+                            <img src={node.avatarUrl} alt={node.displayName} className="w-full h-full object-cover" />
+                        ) : (
+                            initials
+                        )}
                     </div>
                     {isPatri && (
                         <span className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-gradient-to-br from-teal-400 to-emerald-500
