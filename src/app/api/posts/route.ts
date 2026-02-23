@@ -13,13 +13,21 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const status = searchParams.get('status') || 'published';
+        const limitStr = searchParams.get('limit');
+        const offsetStr = searchParams.get('offset');
 
-        const { data, error } = await getAdminClient()
+        const limit = limitStr ? parseInt(limitStr, 10) : 20; // Default 20
+        const offset = offsetStr ? parseInt(offsetStr, 10) : 0;
+
+        let query = getAdminClient()
             .from('posts')
-            .select('*')
+            .select('*', { count: 'exact' })
             .eq('status', status)
             .order('is_pinned', { ascending: false })
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: false })
+            .range(offset, offset + limit - 1);
+
+        const { data, error, count } = await query;
 
         if (error) throw error;
 
@@ -57,7 +65,7 @@ export async function GET(request: NextRequest) {
             });
         }
 
-        return NextResponse.json({ data });
+        return NextResponse.json({ data, meta: { count, limit, offset } });
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json({ error: message }, { status: 500 });

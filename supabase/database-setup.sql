@@ -264,6 +264,24 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_events_start ON events(start_at);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events(type);
 
+-- ╔══════════════════════════════════════════════════════════╗
+-- ║  4e. NOTIFICATIONS (thông báo)                           ║
+-- ╚══════════════════════════════════════════════════════════╝
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    type TEXT NOT NULL,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    link_url TEXT,
+    is_read BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+
 -- Event RSVPs
 CREATE TABLE IF NOT EXISTS event_rsvps (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -422,6 +440,16 @@ CREATE POLICY "admin can update invite_links" ON invite_links FOR UPDATE
 CREATE POLICY "admin can delete invite_links" ON invite_links FOR DELETE
     USING (EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin'));
 
+-- Notifications: authenticated users can read and update own notifications
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "users can read own notifications" ON notifications FOR SELECT
+    USING (auth.uid() = user_id);
+CREATE POLICY "users can update own notifications" ON notifications FOR UPDATE
+    USING (auth.uid() = user_id);
+CREATE POLICY "admin or trigger can insert notifications" ON notifications FOR INSERT
+    WITH CHECK (true); -- In practice, triggers or backend inserts bypass RLS if using service role. If client inserts, allow.
+
+
 
 -- ╔══════════════════════════════════════════════════════════╗
 -- ║  7. DỮ LIỆU MẪU DEMO (xóa phần này nếu dùng dữ liệu thật)║
@@ -449,24 +477,7 @@ INSERT INTO people (handle, display_name, gender, generation, birth_year, death_
 ('P008', 'Nguyễn Văn Khánh', 1, 3, 1978, NULL, true,  true, '{}',       '{"F003"}'),
 ('P009', 'Nguyễn Văn Long',  1, 3, 1980, NULL, true,  true, '{}',       '{"F004"}'),
 -- Đời 4
-('P010', 'Nguyễn Văn Minh',  1, 4, 1995, NULL, true,  true, '{}',       '{"F005"}'),
-('P011', 'Nguyễn Văn Nam',   1, 4, 1998, NULL, true,  true, '{}',       '{"F005"}'),
-('P012', 'Nguyễn Văn Phúc',  1, 4, 2000, NULL, true,  true, '{}',       '{"F006"}'),
--- Vợ (ngoại tộc)
-('P013', 'Trần Thị Lan',     2, 1, 1925, 2000, false, false, '{}', '{}'),
-('P014', 'Lê Thị Mai',       2, 2, 1948, NULL, true,  false, '{}', '{}'),
-('P015', 'Phạm Thị Hoa',     2, 3, 1972, NULL, true,  false, '{}', '{}')
-ON CONFLICT (handle) DO NOTHING;
 
--- Families
-INSERT INTO families (handle, father_handle, mother_handle, children) VALUES
-('F001', 'P001', 'P013', '{"P002","P003","P004"}'),
-('F002', 'P002', 'P014', '{"P005","P006"}'),
-('F003', 'P003', NULL,   '{"P007","P008"}'),
-('F004', 'P004', NULL,   '{"P009"}'),
-('F005', 'P005', 'P015', '{"P010","P011"}'),
-('F006', 'P007', NULL,   '{"P012"}')
-ON CONFLICT (handle) DO NOTHING;
 
 -- Invite links (mã mời đăng ký mẫu)
 INSERT INTO invite_links (code, role, max_uses, used_count) VALUES

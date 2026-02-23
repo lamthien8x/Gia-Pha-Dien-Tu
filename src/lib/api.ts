@@ -8,6 +8,7 @@ const API_BASE = '/api';
 interface ApiResponse<T> {
     data?: T;
     error?: string;
+    meta?: Record<string, any>;
 }
 
 async function fetchApi<T>(
@@ -29,8 +30,11 @@ async function fetchApi<T>(
             return { error: json.error || 'Request failed' };
         }
 
-        // Return json.data mapped to data, or the raw json if there's no nested data key
-        return { data: json.data !== undefined ? json.data : json };
+        // Return json.data mapped to data, along with meta if it exists
+        return {
+            data: json.data !== undefined ? json.data : json,
+            meta: json.meta
+        };
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         return { error: message };
@@ -112,8 +116,8 @@ export const mediaApi = {
 
 export const postsApi = {
     // Lấy danh sách posts
-    list: async (status = 'published') => {
-        return fetchApi<any[]>(`/posts?status=${status}`);
+    list: async ({ status = 'published', limit = 20, offset = 0 } = {}) => {
+        return fetchApi<any[]>(`/posts?status=${status}&limit=${limit}&offset=${offset}`);
     },
 
     // Tạo post mới

@@ -1474,15 +1474,19 @@ function GenerationHeaders({ generationStats, transform, cardH }: {
                 return (
                     <div
                         key={gen}
-                        className="absolute left-0 flex items-center text-[10px] transition-transform duration-100"
+                        className="absolute left-0 flex items-center transition-transform duration-100 drop-shadow-sm group z-20"
                         style={{
-                            top: screenY + (cardH * transform.scale) / 2 - 10,
-                            height: 20,
+                            top: screenY + (cardH * transform.scale) / 2 - 14,
+                            height: 28,
                         }}
                     >
-                        <div className="bg-slate-800/70 backdrop-blur text-white px-2 py-0.5 rounded-r-md
-                            font-medium whitespace-nowrap shadow-sm">
-                            Đ{gen} <span className="opacity-70">· {count}</span>
+                        <div className="bg-slate-800/85 hover:bg-slate-800 backdrop-blur-md text-white pl-2.5 pr-3 py-1 rounded-r-lg
+                            font-medium whitespace-nowrap shadow-md border-y border-r border-slate-700/50 
+                            flex items-center gap-2 transition-all cursor-default relative overflow-hidden">
+                            <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <span className="text-[11px] font-semibold tracking-wide">Đời {gen}</span>
+                            <div className="w-1 h-1 rounded-full bg-slate-500/80" />
+                            <span className="text-[11px] text-slate-300 font-medium">{count} người</span>
                         </div>
                     </div>
                 );
@@ -1527,19 +1531,19 @@ function StatsOverlay({ stats, onClose }: { stats: TreeStats; onClose: () => voi
                 </div>
 
                 {/* Generation distribution */}
-                <div>
-                    <p className="text-[10px] font-semibold text-slate-600 mb-1.5">Phân bố theo đời</p>
-                    <div className="space-y-1">
+                <div className="pt-1">
+                    <p className="text-[11px] font-bold text-slate-700 mb-2 uppercase tracking-wider">Phân bố theo thế hệ</p>
+                    <div className="space-y-2">
                         {stats.perGeneration.map(({ gen, count }) => (
-                            <div key={gen} className="flex items-center gap-1.5 text-[10px]">
-                                <span className="w-6 text-right text-slate-500 font-mono">Đ{gen}</span>
-                                <div className="flex-1 h-3 bg-slate-100 rounded-sm overflow-hidden">
+                            <div key={gen} className="flex items-center gap-2 group">
+                                <span className="w-10 text-[11px] text-slate-600 font-medium whitespace-nowrap">Đời {gen}</span>
+                                <div className="flex-1 h-2.5 relative bg-slate-100 rounded-full overflow-hidden">
                                     <div
-                                        className="h-full bg-gradient-to-r from-indigo-400 to-violet-500 rounded-sm transition-all"
+                                        className="absolute top-0 left-0 h-full bg-gradient-to-r from-indigo-500 hover:from-indigo-400 to-violet-500 hover:to-violet-400 rounded-full transition-all duration-300 shadow-sm"
                                         style={{ width: `${(count / maxCount) * 100}%` }}
                                     />
                                 </div>
-                                <span className="w-6 text-slate-600 font-medium">{count}</span>
+                                <span className="w-12 text-right text-[11px] text-slate-600 font-semibold">{count} người</span>
                             </div>
                         ))}
                     </div>

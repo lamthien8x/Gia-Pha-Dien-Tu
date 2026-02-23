@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
-import { Image as ImageIcon, Upload, Search, Check, X, Loader2, FileImage, FileVideo, FileText, Eye, Tags, Calendar, UserPlus, Edit2 } from 'lucide-react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import { Image as ImageIcon, Upload, Search, Check, X, Loader2, FileImage, FileVideo, FileText, Eye, Tags, Calendar, UserPlus, Edit2, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/components/auth-provider';
 import { supabase } from '@/lib/supabase';
 import { TagPicker } from '@/components/ui/tag-picker';
@@ -44,6 +45,7 @@ export default function MediaLibraryPage() {
     const [uploading, setUploading] = useState(false);
     const [error, setError] = useState('');
     const [previewItem, setPreviewItem] = useState<MediaItem | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
 
     // Dữ liệu cho Tagging
     const [peopleList, setPeopleList] = useState<any[]>([]);
@@ -173,129 +175,281 @@ export default function MediaLibraryPage() {
         return <FileText className="h-5 w-5 text-gray-500" />;
     };
 
+    const filteredItems = useMemo(() => {
+        return items.filter(item => {
+            if (searchQuery && !item.title?.toLowerCase().includes(searchQuery.toLowerCase()) && !item.file_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+            return true;
+        });
+    }, [items, searchQuery]);
+
     return (
-        <div className="space-y-6">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><ImageIcon className="h-6 w-6" />Thư viện</h1>
-                    <p className="text-muted-foreground">Quản lý hình ảnh và tài liệu</p>
-                </div>
-                {isLoggedIn && (
-                    <div>
-                        <input ref={fileRef} type="file" className="hidden" accept="image/*,video/*,.pdf" onChange={handleFileSelect} />
-                        <Button onClick={() => fileRef.current?.click()} disabled={uploading}>
-                            <Upload className="mr-2 h-4 w-4" />{uploading ? 'Đang chuẩn bị...' : 'Tải lên'}
-                        </Button>
+        <div className="max-w-6xl mx-auto space-y-8 pb-12">
+            {/* Modern Hero Section */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border border-primary/10 p-8 sm:p-12">
+                <div className="absolute top-0 right-0 -mt-16 -mr-16 w-64 h-64 bg-primary/10 rounded-full blur-3xl opacity-60"></div>
+                <div className="absolute bottom-0 left-0 -mb-16 -ml-16 w-48 h-48 bg-primary/10 rounded-full blur-2xl opacity-50"></div>
+
+                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+                    <div className="space-y-3">
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-2">
+                            <ImageIcon className="w-4 h-4" /> Kho dữ liệu
+                        </div>
+                        <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-foreground">
+                            Thư viện Gia phả
+                        </h1>
+                        <p className="text-muted-foreground max-w-lg text-lg">
+                            Quản lý hình ảnh, video và tài liệu. Lưu giữ những khoảnh khắc và kỷ vật quý giá của dòng họ.
+                        </p>
                     </div>
-                )}
+
+                    <div className="flex gap-4 items-center">
+                        <div className="bg-background/80 backdrop-blur-sm px-6 py-4 rounded-2xl border shadow-sm text-center">
+                            <div className="text-3xl font-bold text-primary">{items.length}</div>
+                            <div className="text-xs text-muted-foreground uppercase tracking-wider font-semibold mt-1">Tài liệu</div>
+                        </div>
+                        {isLoggedIn && (
+                            <div className="flex flex-col gap-2 relative z-20">
+                                <input ref={fileRef} type="file" className="hidden" accept="image/*,video/*,.pdf" onChange={handleFileSelect} />
+                                <Button size="lg" className="rounded-xl shadow-md" onClick={() => fileRef.current?.click()} disabled={uploading}>
+                                    <Upload className="mr-2 h-5 w-5" />{uploading ? 'Đang chuẩn bị...' : 'Tải lên'}
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+                </div>
             </div>
 
             {error && (
-                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                    {error}
-                    <Button variant="ghost" size="sm" className="ml-2" onClick={() => setError('')}>✕</Button>
+                <div className="rounded-xl bg-destructive/10 p-4 text-sm text-destructive flex items-center justify-between border border-destructive/20">
+                    <span className="font-medium">{error}</span>
+                    <Button variant="ghost" size="sm" className="hover:bg-destructive/20 rounded-full" onClick={() => setError('')}>
+                        <X className="w-4 h-4" />
+                    </Button>
                 </div>
             )}
 
-            <Tabs value={tab} onValueChange={setTab}>
-                <TabsList>
-                    <TabsTrigger value="all">Tất cả</TabsTrigger>
-                    <TabsTrigger value="PENDING">Chờ duyệt</TabsTrigger>
-                    <TabsTrigger value="PUBLISHED">Đã duyệt</TabsTrigger>
-                </TabsList>
-            </Tabs>
+            {/* Main Content Area with View Mode Tabs */}
+            <Tabs defaultValue="list" className="space-y-6">
 
-            {loading ? (
-                <div className="flex items-center justify-center h-48"><Loader2 className="h-8 w-8 animate-spin" /></div>
-            ) : items.length === 0 ? (
-                <Card><CardContent className="flex flex-col items-center justify-center py-12">
-                    <ImageIcon className="h-12 w-12 text-muted-foreground mb-4" />
-                    <p className="text-muted-foreground">Chưa có tài liệu nào</p>
-                </CardContent></Card>
-            ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {items.map(item => {
-                        const publicUrl = getPublicUrl(item);
-                        const isImage = item.mime_type?.startsWith('image/');
-                        return (
-                            <Card key={item.id} className="overflow-hidden hover:shadow-md transition-shadow">
-                                <div
-                                    className="aspect-square bg-muted flex items-center justify-center cursor-pointer relative group"
-                                    onClick={() => isImage && setPreviewItem(item)}
-                                >
-                                    {isImage && publicUrl ? (
-                                        <>
-                                            <img
-                                                src={publicUrl}
-                                                alt={item.title || item.file_name}
-                                                className="w-full h-full object-cover"
-                                                loading="lazy"
-                                            />
-                                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <Eye className="h-8 w-8 text-white" />
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <div className="text-center p-4">
-                                            {getFileIcon(item.mime_type)}
-                                            <p className="text-xs text-muted-foreground mt-2 truncate">{item.file_name}</p>
-                                        </div>
-                                    )}
-                                    <Badge
-                                        variant={STATE_BADGE[item.state]?.variant || 'secondary'}
-                                        className="absolute top-2 right-2"
-                                    >
-                                        {STATE_BADGE[item.state]?.label || item.state}
-                                    </Badge>
+                {/* Filters and View Toggles */}
+                <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between sticky top-16 z-20 bg-background/95 backdrop-blur py-3 rounded-lg -mx-2 px-2">
+                    <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full lg:w-auto">
+                        <div className="relative flex-1 max-w-md">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Tìm kiếm tài liệu..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-11 h-11 rounded-full bg-muted/50 border-transparent hover:bg-muted focus:bg-background transition-colors"
+                            />
+                        </div>
+
+                        {/* Elegant Filter Pills for State */}
+                        <div className="flex gap-2 items-center overflow-x-auto pb-1 sm:pb-0 scrollbar-hide">
+                            <div className="h-6 w-px bg-border mx-2 hidden sm:block"></div>
+
+                            <Badge
+                                variant={tab === 'all' ? 'default' : 'secondary'}
+                                className="h-9 px-4 cursor-pointer hover:bg-primary/80 transition-colors whitespace-nowrap rounded-full text-sm font-medium"
+                                onClick={() => setTab('all')}
+                            >
+                                Tất cả
+                            </Badge>
+                            <Badge
+                                variant={tab === 'PUBLISHED' ? 'default' : 'secondary'}
+                                className="h-9 px-4 cursor-pointer hover:bg-primary/80 transition-colors whitespace-nowrap rounded-full text-sm font-medium bg-emerald-500/10 text-emerald-600 hover:bg-emerald-500/20 data-[state=active]:bg-emerald-500 data-[state=active]:text-white"
+                                data-state={tab === 'PUBLISHED' ? 'active' : 'inactive'}
+                                onClick={() => setTab('PUBLISHED')}
+                            >
+                                Đã duyệt
+                            </Badge>
+                            <Badge
+                                variant={tab === 'PENDING' ? 'default' : 'secondary'}
+                                className="h-9 px-4 cursor-pointer hover:bg-primary/80 transition-colors whitespace-nowrap rounded-full text-sm font-medium bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 data-[state=active]:bg-amber-500 data-[state=active]:text-white"
+                                data-state={tab === 'PENDING' ? 'active' : 'inactive'}
+                                onClick={() => setTab('PENDING')}
+                            >
+                                Chờ duyệt
+                            </Badge>
+                        </div>
+                    </div>
+
+                    <TabsList className="bg-muted/50 p-1 rounded-full h-11 shrink-0 self-end lg:self-auto">
+                        <TabsTrigger value="list" className="rounded-full px-5 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"><ListIcon className="w-4 h-4 mr-2" /> Danh sách</TabsTrigger>
+                        <TabsTrigger value="grid" className="rounded-full px-5 data-[state=active]:bg-background data-[state=active]:shadow-sm transition-all"><LayoutGrid className="w-4 h-4 mr-2" /> Lưới</TabsTrigger>
+                    </TabsList>
+                </div>
+
+                {loading ? (
+                    <div className="flex items-center justify-center min-h-[40vh]">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-primary"></div>
+                    </div>
+                ) : filteredItems.length === 0 ? (
+                    <div className="py-20 text-center flex flex-col items-center justify-center bg-muted/20 rounded-3xl border border-dashed border-muted-foreground/20">
+                        <ImageIcon className="h-16 w-16 text-muted-foreground/40 mb-4" />
+                        <h3 className="text-xl font-semibold text-foreground">Không có tài liệu</h3>
+                        <p className="text-muted-foreground mt-2 max-w-sm">Chưa có tài liệu nào trong thư viện hoặc không khớp với tìm kiếm.</p>
+                        {searchQuery && (
+                            <Button variant="outline" className="mt-6 rounded-full" onClick={() => setSearchQuery('')}>Xóa tìm kiếm</Button>
+                        )}
+                    </div>
+                ) : (
+                    <>
+                        {/* List View */}
+                        <TabsContent value="list" className="m-0 focus-visible:outline-none">
+                            <Card className="rounded-2xl overflow-hidden border-border/50 shadow-sm">
+                                <div className="overflow-x-auto">
+                                    <Table>
+                                        <TableHeader className="bg-muted/30">
+                                            <TableRow className="hover:bg-transparent">
+                                                <TableHead className="py-4 pl-6 font-semibold text-foreground">Tài liệu</TableHead>
+                                                <TableHead className="py-4 hidden sm:table-cell font-semibold text-foreground">Trạng thái</TableHead>
+                                                <TableHead className="py-4 hidden md:table-cell font-semibold text-foreground">Kích thước</TableHead>
+                                                <TableHead className="py-4 hidden lg:table-cell font-semibold text-foreground">Người tải lên</TableHead>
+                                                <TableHead className="py-4 font-semibold text-foreground text-right pr-6">Hành động</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {filteredItems.map((item) => {
+                                                const publicUrl = getPublicUrl(item);
+                                                const isImage = item.mime_type?.startsWith('image/');
+                                                return (
+                                                    <TableRow key={item.id} className="group hover:bg-muted/40 transition-colors cursor-pointer" onClick={(e) => {
+                                                        const target = e.target as HTMLElement;
+                                                        if (target.closest('button')) return;
+                                                        if (isImage) setPreviewItem(item);
+                                                    }}>
+                                                        <TableCell className="pl-6 py-4">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="w-12 h-12 rounded-lg bg-background flex items-center justify-center overflow-hidden shrink-0 ring-1 ring-border shadow-sm">
+                                                                    {isImage && publicUrl ? (
+                                                                        <img src={publicUrl} className="w-full h-full object-cover group-hover:scale-110 transition-transform" />
+                                                                    ) : (
+                                                                        getFileIcon(item.mime_type)
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-semibold text-[15px] group-hover:text-primary transition-colors max-w-[200px] sm:max-w-xs truncate">
+                                                                        {item.title || item.file_name}
+                                                                    </span>
+                                                                    <span className="text-xs text-muted-foreground mt-0.5">{item.mime_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
+                                                                </div>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="hidden sm:table-cell py-4">
+                                                            <Badge variant={STATE_BADGE[item.state]?.variant || 'secondary'} className="font-medium shadow-sm">
+                                                                {STATE_BADGE[item.state]?.label || item.state}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="hidden md:table-cell py-4">
+                                                            <span className="text-muted-foreground text-sm font-medium">{formatSize(item.file_size)}</span>
+                                                        </TableCell>
+                                                        <TableCell className="hidden lg:table-cell py-4">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-sm font-medium">
+                                                                    {item.uploader?.display_name || item.uploader?.email?.split('@')[0] || 'Ẩn danh'}
+                                                                </span>
+                                                                <span className="text-xs text-muted-foreground">{new Date(item.created_at).toLocaleDateString('vi-VN')}</span>
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell className="text-right pr-6 py-4" onClick={(e) => e.stopPropagation()}>
+                                                            {isAdmin && item.state === 'PENDING' ? (
+                                                                <div className="flex gap-2 justify-end">
+                                                                    <Button size="sm" variant="outline" className="h-8 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleAction(item.id, 'approve')}>
+                                                                        <Check className="h-3.5 w-3.5 mr-1" /> Duyệt
+                                                                    </Button>
+                                                                    <Button size="sm" variant="destructive" className="h-8 rounded-lg" onClick={() => handleAction(item.id, 'reject')}>
+                                                                        <X className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </div>
+                                                            ) : (
+                                                                <Button variant="ghost" size="sm" className="h-8 text-muted-foreground hover:text-foreground" onClick={() => isImage && setPreviewItem(item)}>
+                                                                    <Eye className="w-4 h-4 mr-1.5" /> Xem
+                                                                </Button>
+                                                            )}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })}
+                                        </TableBody>
+                                    </Table>
                                 </div>
-                                <CardContent className="p-3 space-y-2">
-                                    <p className="font-medium text-sm truncate">{item.title || item.file_name}</p>
-                                    <p className="text-xs text-muted-foreground">{formatSize(item.file_size)} · {item.mime_type}</p>
-                                    <p className="text-xs text-muted-foreground">
-                                        {item.uploader?.display_name || item.uploader?.email?.split('@')[0] || 'Ẩn danh'} · {new Date(item.created_at).toLocaleDateString('vi-VN')}
-                                    </p>
-                                    {item.tagged_people && item.tagged_people.length > 0 && (
-                                        <div className="flex -space-x-2 overflow-hidden mt-2">
-                                            {item.tagged_people.map((id) => {
-                                                const p = peopleList.find(x => x.handle === id);
-                                                if (!p) return null;
-                                                return (
-                                                    <div key={id} className="inline-block h-6 w-6 rounded-full ring-2 ring-background bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary" title={p.display_name}>
-                                                        {p.avatar_url ? <img src={p.avatar_url} className="w-full h-full rounded-full object-cover" /> : (p.display_name?.charAt(0) || '?')}
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                    {item.tagged_events && item.tagged_events.length > 0 && (
-                                        <div className="flex gap-1 flex-wrap mt-1">
-                                            {item.tagged_events.map((id) => {
-                                                const e = eventsList.find(x => x.id === id);
-                                                if (!e) return null;
-                                                return (
-                                                    <Badge key={id} variant="secondary" className="text-[10px] px-1.5 py-0 h-4 bg-muted/50 rounded-sm">
-                                                        {e.title}
-                                                    </Badge>
-                                                );
-                                            })}
-                                        </div>
-                                    )}
-                                    {isAdmin && item.state === 'PENDING' && (
-                                        <div className="flex gap-2 pt-2">
-                                            <Button size="sm" variant="outline" className="flex-1" onClick={() => handleAction(item.id, 'approve')}>
-                                                <Check className="h-3 w-3 mr-1" />Duyệt
-                                            </Button>
-                                            <Button size="sm" variant="destructive" className="flex-1" onClick={() => handleAction(item.id, 'reject')}>
-                                                <X className="h-3 w-3 mr-1" />Từ chối
-                                            </Button>
-                                        </div>
-                                    )}
-                                </CardContent>
                             </Card>
-                        );
-                    })}
-                </div>
-            )}
+                        </TabsContent>
+
+                        {/* Grid View */}
+                        <TabsContent value="grid" className="m-0 focus-visible:outline-none">
+                            <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 w-full">
+                                {filteredItems.map(item => {
+                                    const publicUrl = getPublicUrl(item);
+                                    const isImage = item.mime_type?.startsWith('image/');
+                                    return (
+                                        <Card key={item.id} className="overflow-hidden hover:shadow-xl transition-all duration-300 border-border/50 hover:border-primary/30 transform hover:-translate-y-1 bg-gradient-to-b from-background to-muted/10 rounded-2xl flex flex-col group">
+                                            <div
+                                                className="aspect-[4/3] bg-muted/50 flex items-center justify-center cursor-pointer relative overflow-hidden w-full"
+                                                onClick={() => isImage && setPreviewItem(item)}
+                                            >
+                                                {isImage && publicUrl ? (
+                                                    <>
+                                                        <img
+                                                            src={publicUrl}
+                                                            alt={item.title || item.file_name}
+                                                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                                                            loading="lazy"
+                                                        />
+                                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-sm">
+                                                            <Eye className="h-10 w-10 text-white drop-shadow-lg" />
+                                                        </div>
+                                                    </>
+                                                ) : (
+                                                    <div className="text-center p-4">
+                                                        <div className="bg-background/80 p-4 rounded-full inline-flex shadow-sm mb-3">
+                                                            {getFileIcon(item.mime_type)}
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground mt-2 truncate w-full px-4">{item.file_name}</p>
+                                                    </div>
+                                                )}
+                                                <Badge
+                                                    variant={STATE_BADGE[item.state]?.variant || 'secondary'}
+                                                    className="absolute top-3 right-3 shadow-md border-transparent"
+                                                >
+                                                    {STATE_BADGE[item.state]?.label || item.state}
+                                                </Badge>
+                                            </div>
+                                            <CardContent className="p-5 flex flex-col flex-1">
+                                                <h3 className="font-bold text-[1.05rem] truncate mb-1.5 leading-tight group-hover:text-primary transition-colors">
+                                                    {item.title || item.file_name}
+                                                </h3>
+                                                <div className="flex justify-between items-center text-xs text-muted-foreground mb-4">
+                                                    <span className="font-medium">{formatSize(item.file_size)}</span>
+                                                    <span className="px-2 py-0.5 bg-muted rounded-md">{item.mime_type?.split('/')[1]?.toUpperCase() || 'FILE'}</span>
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-auto pt-4 border-t border-border/50 text-xs text-muted-foreground">
+                                                    <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0 ring-2 ring-background">
+                                                        {(item.uploader?.display_name || item.uploader?.email || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <span className="truncate flex-1 font-medium">{item.uploader?.display_name || item.uploader?.email?.split('@')[0] || 'Ẩn danh'}</span>
+                                                    <span>{new Date(item.created_at).toLocaleDateString('vi-VN')}</span>
+                                                </div>
+                                                {isAdmin && item.state === 'PENDING' && (
+                                                    <div className="flex gap-2 pt-4 mt-2 border-t border-border/50">
+                                                        <Button size="sm" variant="outline" className="flex-1 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50" onClick={() => handleAction(item.id, 'approve')}>
+                                                            <Check className="h-4 w-4 mr-1.5" />Duyệt
+                                                        </Button>
+                                                        <Button size="sm" variant="destructive" className="flex-1 rounded-lg" onClick={() => handleAction(item.id, 'reject')}>
+                                                            <X className="h-4 w-4 mr-1.5" />Từ chối
+                                                        </Button>
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        </TabsContent>
+                    </>
+                )}
+            </Tabs>
 
             {/* Upload Settings Dialog */}
             <Dialog open={!!uploadDialogFile} onOpenChange={(open) => !open && setUploadDialogFile(null)}>
