@@ -451,32 +451,6 @@ CREATE POLICY "admin or trigger can insert notifications" ON notifications FOR I
 
 
 
--- ╔══════════════════════════════════════════════════════════╗
--- ║  7. DỮ LIỆU MẪU DEMO (xóa phần này nếu dùng dữ liệu thật)║
--- ╚══════════════════════════════════════════════════════════╝
-
--- Dòng họ mẫu: Họ Nguyễn Văn — 4 thế hệ, 15 thành viên
--- Cấu trúc:
---   Đời 1: Nguyễn Văn An (tổ tiên)
---   Đời 2: Bình, Cường, Dũng (3 con trai)
---   Đời 3: Bình → Hải, Hùng | Cường → Khoa, Khánh | Dũng → Long
---   Đời 4: Hải → Minh, Nam | Khoa → Phúc
-
--- People
-INSERT INTO people (handle, display_name, gender, generation, birth_year, death_year, is_living, is_patrilineal, families, parent_families) VALUES
--- Đời 1
-('P001', 'Nguyễn Văn An',    1, 1, 1920, 1995, false, true, '{"F001"}', '{}'),
--- Đời 2
-('P002', 'Nguyễn Văn Bình',  1, 2, 1945, NULL, true,  true, '{"F002"}', '{"F001"}'),
-('P003', 'Nguyễn Văn Cường', 1, 2, 1948, NULL, true,  true, '{"F003"}', '{"F001"}'),
-('P004', 'Nguyễn Văn Dũng',  1, 2, 1951, 2020, false, true, '{"F004"}', '{"F001"}'),
--- Đời 3
-('P005', 'Nguyễn Văn Hải',   1, 3, 1970, NULL, true,  true, '{"F005"}', '{"F002"}'),
-('P006', 'Nguyễn Văn Hùng',  1, 3, 1973, NULL, true,  true, '{}',       '{"F002"}'),
-('P007', 'Nguyễn Văn Khoa',  1, 3, 1975, NULL, true,  true, '{"F006"}', '{"F003"}'),
-('P008', 'Nguyễn Văn Khánh', 1, 3, 1978, NULL, true,  true, '{}',       '{"F003"}'),
-('P009', 'Nguyễn Văn Long',  1, 3, 1980, NULL, true,  true, '{}',       '{"F004"}'),
--- Đời 4
 
 
 -- Invite links (mã mời đăng ký mẫu)

@@ -22,7 +22,6 @@ import {
     CARD_W, CARD_H,
     type TreeNode, type TreeFamily, type LayoutResult, type PositionedNode, type PositionedCouple, type Connection,
 } from '@/lib/tree-layout';
-import { getMockTreeData } from '@/lib/mock-data';
 
 type ViewMode = 'full' | 'ancestor' | 'descendant';
 type ZoomLevel = 'full' | 'compact' | 'mini';
@@ -31,6 +30,13 @@ function getZoomLevel(scale: number): ZoomLevel {
     if (scale > 0.45) return 'full';
     if (scale > 0.15) return 'compact';
     return 'mini';
+}
+
+function normalizeString(str: string) {
+    return str ? str.normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/đ/g, 'd').replace(/Đ/g, 'D')
+        .toLowerCase() : '';
 }
 
 // === Branch Summary (F4) ===
@@ -190,6 +196,7 @@ export default function TreeViewPage() {
     // Editor mode state
     const [editorMode, setEditorMode] = useState(false);
     const [selectedCard, setSelectedCard] = useState<string | null>(null);
+    const [zoomTarget, setZoomTarget] = useState<string | null>(null);
     const { isAdmin } = useAuth();
 
     // URL query param initialization + auto-collapse on initial load
@@ -303,7 +310,6 @@ export default function TreeViewPage() {
                 }
             } catch { /* fallback to mock */ }
             // Fallback: use bundled mock data (demo mode)
-            setTreeData(getMockTreeData());
             setLoading(false);
         };
         fetchTree();
@@ -539,6 +545,9 @@ export default function TreeViewPage() {
 
     const visibleNodes = useMemo(() => {
         if (!layout || !viewportRef.current) return layout?.nodes ?? [];
+        // Bypass culling for smaller trees to prevent animation/centering glitches
+        if (layout.nodes.length < 300) return layout.nodes;
+
         const vw = viewportRef.current.clientWidth;
         const vh = viewportRef.current.clientHeight;
         const { x: tx, y: ty, scale } = transform;
@@ -619,8 +628,8 @@ export default function TreeViewPage() {
     // Search highlight
     useEffect(() => {
         if (!searchQuery || !treeData) { setHighlightHandles(new Set()); return; }
-        const q = searchQuery.toLowerCase();
-        setHighlightHandles(new Set(treeData.people.filter(p => p.displayName.toLowerCase().includes(q)).map(p => p.handle)));
+        const q = normalizeString(searchQuery);
+        setHighlightHandles(new Set(treeData.people.filter(p => normalizeString(p.displayName).includes(q)).map(p => p.handle)));
     }, [searchQuery, treeData]);
 
     // Fit all
@@ -640,9 +649,13 @@ export default function TreeViewPage() {
     }, [layout]);
 
     // Auto-fit on first load
+    const initialFitRef = useRef(false);
     useEffect(() => {
-        if (layout && !loading) setTimeout(fitAll, 50);
-    }, [layout, loading]); // eslint-disable-line
+        if (layout && !loading && !initialFitRef.current) {
+            initialFitRef.current = true;
+            setTimeout(fitAll, 50);
+        }
+    }, [layout, loading, fitAll]);
 
     // === Mouse handlers ===
     const handleMouseDown = (e: React.MouseEvent) => {
@@ -779,19 +792,44 @@ export default function TreeViewPage() {
     }, []); // Empty deps - listeners attached once
 
     // Pan to person
-    const panToPerson = useCallback((handle: string) => {
+    const panToPerson = useCallback((handle: string, targetScale?: number) => {
         if (!layout || !viewportRef.current) return;
         const node = layout.nodes.find(n => n.node.handle === handle);
         if (!node) return;
         const vw = viewportRef.current.clientWidth;
         const vh = viewportRef.current.clientHeight;
-        setTransform(t => ({
-            ...t,
-            x: vw / 2 - (node.x + CARD_W / 2) * t.scale,
-            y: vh / 2 - (node.y + CARD_H / 2) * t.scale,
-        }));
+        setTransform(t => {
+            const finalScale = targetScale ?? t.scale;
+            return {
+                scale: finalScale,
+                x: vw / 2 - (node.x + CARD_W / 2) * finalScale,
+                y: vh / 2 - (node.y + CARD_H / 2) * finalScale,
+            };
+        });
         setFocusPerson(handle);
     }, [layout]);
+
+    // Auto-zoom when target is set (waits for fresh layout)
+    useEffect(() => {
+        if (zoomTarget && layout && viewportRef.current) {
+            // Delay one frame to ensure DOM layout dimensions are fully populated
+            const tid = setTimeout(() => {
+                const node = layout.nodes.find(n => n.node.handle === zoomTarget);
+                if (node && viewportRef.current) {
+                    const vw = viewportRef.current.clientWidth || 1200;
+                    const vh = viewportRef.current.clientHeight || 900;
+                    const finalScale = 1.0;
+                    setTransform({
+                        scale: finalScale,
+                        x: vw / 2 - (node.x + CARD_W / 2) * finalScale,
+                        y: vh / 2 - (node.y + CARD_H / 2) * finalScale,
+                    });
+                }
+            }, 50);
+            setZoomTarget(null);
+            return () => clearTimeout(tid);
+        }
+    }, [layout, zoomTarget]);
 
     // View mode
     const changeViewMode = (mode: ViewMode) => {
@@ -820,8 +858,8 @@ export default function TreeViewPage() {
     // Search results
     const searchResults = useMemo(() => {
         if (!searchQuery || !treeData) return [];
-        const q = searchQuery.toLowerCase();
-        return treeData.people.filter(p => p.displayName.toLowerCase().includes(q)).slice(0, 8);
+        const q = normalizeString(searchQuery);
+        return treeData.people.filter(p => normalizeString(p.displayName).includes(q)).slice(0, 8);
     }, [searchQuery, treeData]);
 
     // connPath kept for compatibility but unused with batched rendering
@@ -837,36 +875,7 @@ export default function TreeViewPage() {
                     onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp}
                     onClick={() => { setShowSearch(false); setContextMenu(null); if (editorMode) setSelectedCard(null); }}
                 >
-                    {/* Floating Search */}
-                    <div className="absolute bottom-10 left-4 z-50">
-                        {showSearch && searchResults.length > 0 && (
-                            <Card className="absolute z-50 w-full left-0 bottom-full mb-2 shadow-lg border-slate-200 bg-white/95 backdrop-blur">
-                                <CardContent className="p-1 max-h-64 overflow-y-auto">
-                                    {searchResults.map(p => (
-                                        <button key={p.handle} onClick={(e) => {
-                                            e.stopPropagation();
-                                            setFocusPerson(p.handle);
-                                            setViewMode('descendant');
-                                            autoCollapseForDescendant(p.handle);
-                                            setShowSearch(false);
-                                            setSearchQuery('');
-                                        }}
-                                            className="w-full text-left px-3 py-2 rounded-md text-sm hover:bg-slate-100 transition-colors flex justify-between items-center group">
-                                            <span className="font-medium group-hover:text-emerald-700">{p.displayName}</span>
-                                            <span className="text-xs text-slate-500">{'generation' in p ? `Đời ${(p as any).generation}` : ''}</span>
-                                        </button>
-                                    ))}
-                                </CardContent>
-                            </Card>
-                        )}
-                        <div className="relative w-56">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Tìm kiếm thành viên..." value={searchQuery}
-                                onChange={e => { setSearchQuery(e.target.value); setShowSearch(true); }}
-                                onFocus={() => setShowSearch(true)}
-                                className="pl-9 h-10 rounded-full border-slate-200 bg-white/90 backdrop-blur shadow-sm focus-visible:ring-emerald-500/50" />
-                        </div>
-                    </div>
+
 
                     {/* Floating Controls */}
                     <div className="absolute bottom-10 right-4 z-50 flex flex-col gap-2">
