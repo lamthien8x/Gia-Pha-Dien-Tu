@@ -80,10 +80,7 @@ export default function BookPage() {
             } catch { /* fallback */ }
             // Fallback: use mock data when Supabase is not configured
             if (people.length === 0) {
-                const { getMockTreeData } = await import('@/lib/mock-data');
-                const mock = getMockTreeData();
-                people = mock.people;
-                families = mock.families;
+
             }
             const familyName = people.length > 0 ? (people[0].displayName?.split(' ').slice(0, 2).join(' ') || 'Dòng Họ') : 'Dòng Họ';
             const data = generateBookData(people, families, familyName);
